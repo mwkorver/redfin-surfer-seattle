@@ -1,0 +1,12 @@
+{
+  "name": "redfin-surfer-test",
+  "version": "1.0.0",
+  "description": "Playwright verification workspace for Real Estate Diligence Sidecar",
+  "main": "test_extension.js",
+  "scripts": {
+    "start": "node test_extension.js"
+  },
+  "dependencies": {
+    "playwright": "^1.44.0"
+  }
+}

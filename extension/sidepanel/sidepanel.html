@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diligence Sidecar</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div>
+        <div class="brand">
+          <span class="logo-dot"></span>
+          <h1>Saved Properties</h1>
+        </div>
+        <p class="header-copy">Ranked by weighted diligence score</p>
+      </div>
+      <span id="property-count" class="property-count">0</span>
+    </header>
+
+    <main class="app-content">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-heart">&#9825;</div>
+        <h2>No saved properties yet</h2>
+        <p>Heart a Redfin property to add it to your ranked diligence list.</p>
+      </div>
+
+      <div id="portfolio-view" class="hidden">
+        <div class="list-heading">
+          <span>Property</span>
+          <span>Score</span>
+        </div>
+        <div id="property-list" class="property-list"></div>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <details class="settings-details">
+        <summary class="settings-summary">
+          <span>Analysis settings</span>
+          <span class="arrow">▾</span>
+        </summary>
+        <div class="settings-content">
+          <div class="input-group">
+            <label for="input-api-url">API Gateway URL</label>
+            <input type="url" id="input-api-url" placeholder="https://api.example.com/diligence">
+          </div>
+          <label class="checkbox-container">
+            <input type="checkbox" id="chk-auto-diligence">
+            <span class="checkmark"></span>
+            Run analysis when a property is hearted
+          </label>
+          <div class="settings-status">
+            Connection: <span id="connection-status" class="status-indicator disconnected">Local analysis</span>
+          </div>
+        </div>
+      </details>
+    </footer>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

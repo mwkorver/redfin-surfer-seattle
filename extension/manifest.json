@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Real Estate Due-Diligence Sidecar",
+  "version": "1.0",
+  "description": "Geographically scoped real estate due-diligence sidecar for Redfin.",
+  "permissions": [
+    "activeTab",
+    "sidePanel",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.redfin.com/*",
+    "https://data.seattle.gov/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.redfin.com/*"
+      ],
+      "js": [
+        "shared/parser.js",
+        "content.js"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open Diligence Sidecar"
+  }
+}
