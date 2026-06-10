@@ -12,14 +12,13 @@ Redfin Surfer Seattle is the result.
 <img width="375" height="237" alt="image" src="https://github.com/user-attachments/assets/a7265870-4096-4cae-9273-59efc02e8bbc" />
 
 
-
 ## Status
 
-This is a personal research prototype, not a maintained open-source project. This repository is published for reference and transparency. I am not accepting issues, pull requests, feature requests, or support requests.
+This is a personal research prototype published for reference and transparency, not a maintained open-source project. I'm not accepting issues, pull requests, feature requests, or support requests.
 
-This is a Chrome extension that adds a due-diligence side panel to Redfin property listings, scoped to Seattle and King County, WA. Heart a listing on Redfin and the panel automatically scores it across five topics, pulling data from several public sources. 
+A Chrome extension that adds a due-diligence side panel to Redfin property listings, scoped to Seattle and King County, WA. Heart a listing on Redfin and the panel automatically scores it across five topics using data from several public sources.
 
-Optionally, the project includes an AWS Lambda function that writes collected data to Parquet files in Amazon S3. This component is currently a stub for future work involving Redfin email notifications and automated property tracking. The browser extension functions independently and does not require the Lambda backend.
+The repository also includes an optional AWS Lambda/DuckDB backend that stores portfolio data as Parquet files in Amazon S3. This component is primarily a foundation for future work around Redfin email notifications and property tracking. The extension itself works independently and does not require the backend.
 
 The `.seattle` suffix is intentional — the tool is designed as a city-specific instance of a reusable pattern. A `redfin-surfer.la` or `redfin-surfer.nyc` would wire up different data sources for the same side panel framework.
 
