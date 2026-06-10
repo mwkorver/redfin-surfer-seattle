@@ -1,7 +1,7 @@
 # redfin-surfer.seattle
 
 
-## Why this project exists
+## Why this project exists 
 
 This project grew out of my search for a home in Seattle.
 
