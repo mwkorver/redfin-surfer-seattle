@@ -2,9 +2,7 @@
 
 ## Status
 
-This repository is published for reference and transparency.
-
-I am not currently accepting issues, pull requests, feature requests, or support questions. You are welcome to fork the code under the terms of the license.
+This is a personal research prototype, not a maintained open-source project. This repository is published for reference and transparency.
 
 A Chrome extension that adds a due-diligence side panel to Redfin property listings, scoped to Seattle and King County, WA. Heart a listing on Redfin and the panel automatically scores it across five topics, pulling data from several public sources.
 
