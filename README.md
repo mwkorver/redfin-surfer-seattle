@@ -1,10 +1,22 @@
 # redfin-surfer.seattle
 
+
+## Why this project exists
+
+This is a personal research tool that grew out of my search for a home in Seattle.
+
+It's also the kind of project that I probably wouldn't have built a few years ago. The value of the tool to me is real, but historically the effort required to design, code, test, and maintain it would have outweighed the benefit for a project with an audience of essentially one person.
+
+Modern AI-assisted development tools change that equation. They dramatically reduce the cost of experimentation, making it practical to build small, highly specialized applications that solve narrow personal problems. This repository is an example of that shift: a custom browser extension built to augment Redfin listings with additional public information and analysis relevant to my own home search.
+
+More broadly, I believe one of the most important impacts of AI on software development is not simply writing production code faster, but making previously uneconomic projects worth building in the first place.
+
+
 ## Status
 
 This is a personal research prototype, not a maintained open-source project. This repository is published for reference and transparency.
 
-A Chrome extension that adds a due-diligence side panel to Redfin property listings, scoped to Seattle and King County, WA. Heart a listing on Redfin and the panel automatically scores it across five topics, pulling data from several public sources.
+A Chrome extension that adds a due-diligence side panel to Redfin property listings, scoped to Seattle and King County, WA. Heart a listing on Redfin and the panel automatically scores it across five topics, pulling data from several public sources. Optionally it also includes a Lamba function that saves data in parquet on S3. That is part is a stub for future projects that involving Redfin email notification. But extension works without it.
 
 The `.seattle` suffix is intentional — the tool is designed as a city-specific instance of a reusable pattern. A `redfin-surfer.la` or `redfin-surfer.nyc` would wire up different data sources for the same side panel framework.
 
