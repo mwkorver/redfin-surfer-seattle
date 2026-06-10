@@ -5,10 +5,9 @@
 
 This project grew out of my search for a home in Seattle.
 
-A few years ago I probably wouldn't have bothered building something this specialized. The audience is essentially one person. Modern AI coding tools change that equation by making it much cheaper to experiment and build niche software.
+A few years ago I probably wouldn't have bothered building something this specialized. Modern AI coding tools make it much cheaper to experiment and build niche software, making projects like this worth pursuing.
 
 Redfin Surfer Seattle is the result.
-
 
 <img width="375" height="237" alt="image" src="https://github.com/user-attachments/assets/a7265870-4096-4cae-9273-59efc02e8bbc" />
 
@@ -16,9 +15,11 @@ Redfin Surfer Seattle is the result.
 
 ## Status
 
-This is a personal research prototype, not a maintained open-source project. This repository is published for reference and transparency.
+This is a personal research prototype, not a maintained open-source project. This repository is published for reference and transparency. I am not accepting issues, pull requests, feature requests, or support requests.
 
-A Chrome extension that adds a due-diligence side panel to Redfin property listings, scoped to Seattle and King County, WA. Heart a listing on Redfin and the panel automatically scores it across five topics, pulling data from several public sources. Optionally it also includes a Lamba function that saves data in parquet on S3. That is part is a stub for future projects that involving Redfin email notification. But extension works without it.
+This is a Chrome extension that adds a due-diligence side panel to Redfin property listings, scoped to Seattle and King County, WA. Heart a listing on Redfin and the panel automatically scores it across five topics, pulling data from several public sources. 
+
+Optionally, the project includes an AWS Lambda function that writes collected data to Parquet files in Amazon S3. This component is currently a stub for future work involving Redfin email notifications and automated property tracking. The browser extension functions independently and does not require the Lambda backend.
 
 The `.seattle` suffix is intentional — the tool is designed as a city-specific instance of a reusable pattern. A `redfin-surfer.la` or `redfin-surfer.nyc` would wire up different data sources for the same side panel framework.
 
