@@ -454,8 +454,7 @@ function fetchRiparianStreams(boundaryGeoJson) {
   const arcgisPolygon = geojsonPolygonToArcGIS(boundaryGeoJson);
   if (!arcgisPolygon) return Promise.resolve(null);
 
-  return bufferGeometry(arcgisPolygon, 165)
-    .then(buffered => buffered ? queryFStreams(buffered) : [])
+  return queryFStreams(arcgisPolygon)
     .catch(error => {
       console.warn("[Diligence Sidecar] Riparian stream query failed:", error);
       return null;
@@ -468,35 +467,18 @@ function geojsonPolygonToArcGIS(geojson) {
     return { rings: geojson.coordinates, spatialReference: { wkid: 4326 } };
   }
   if (geojson.type === "MultiPolygon" && Array.isArray(geojson.coordinates)) {
-    // Flatten all rings from all polygons into one ArcGIS polygon
     return { rings: geojson.coordinates.flat(1), spatialReference: { wkid: 4326 } };
   }
   return null;
 }
 
-function bufferGeometry(arcgisPolygon, distanceFeet) {
+function queryFStreams(parcelPolygon) {
   const body = new URLSearchParams({
-    geometries: JSON.stringify({ geometryType: "esriGeometryPolygon", geometries: [arcgisPolygon] }),
-    inSR: "4326",
-    outSR: "4326",
-    distances: String(distanceFeet),
-    unit: "9002",
-    geodesic: "true",
-    f: "json"
-  });
-  return fetch("https://utility.arcgisonline.com/arcgis/rest/services/Geometry/GeometryServer/buffer", {
-    method: "POST",
-    body
-  })
-    .then(r => r.ok ? r.json() : Promise.reject(new Error(`Buffer HTTP ${r.status}`)))
-    .then(data => data?.geometries?.[0] ? { ...data.geometries[0], spatialReference: { wkid: 4326 } } : null);
-}
-
-function queryFStreams(bufferedPolygon) {
-  const body = new URLSearchParams({
-    geometry: JSON.stringify(bufferedPolygon),
+    geometry: JSON.stringify(parcelPolygon),
     geometryType: "esriGeometryPolygon",
     spatialRel: "esriSpatialRelIntersects",
+    distance: "165",
+    units: "esriFeet",
     where: "StreamType='F'",
     outFields: "StreamType,FishHabitatCriteria,WatercourseNameS",
     inSR: "4326",

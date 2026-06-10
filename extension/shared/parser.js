@@ -64,6 +64,9 @@ const PropertyParser = {
     if (!data.sqft) {
       data.sqft = this.fallbackSqft();
     }
+    if (!data.lotSqft) {
+      data.lotSqft = this.fallbackLotSqft();
+    }
 
     // Clean up coordinates
     if (data.geo) {
@@ -168,6 +171,17 @@ const PropertyParser = {
         const fs = obj.floorSize;
         const raw = typeof fs === 'number' ? fs : (typeof fs === 'object' ? parseFloat(fs.value) : NaN);
         if (!isNaN(raw) && raw > 0) extracted.sqft = raw;
+      }
+
+      // Parse lot size (sq ft); convert from sq meters if unit indicates metric
+      if (obj.lotSize) {
+        const ls = obj.lotSize;
+        let raw = typeof ls === 'number' ? ls : (typeof ls === 'object' ? parseFloat(ls.value) : NaN);
+        if (!isNaN(raw) && raw > 0) {
+          const unit = typeof ls === 'object' ? (ls.unitCode || ls.unitText || '') : '';
+          if (['MTK', 'MTR', 'm2', 'SQM'].includes(unit)) raw = Math.round(raw * 10.7639);
+          extracted.lotSqft = raw;
+        }
       }
 
       results.push(extracted);
@@ -320,6 +334,23 @@ const PropertyParser = {
     if (rfSqFt) {
       const val = parseFloat(rfSqFt.textContent.replace(/[^0-9.]/g, ''));
       if (!isNaN(val) && val > 0) return val;
+    }
+    return null;
+  },
+
+  /**
+   * DOM Scraping Fallback: Lot size in sq ft
+   */
+  fallbackLotSqft() {
+    const el = document.querySelector('[data-rf-test-id="abp-lotSize"] .statsValue, [data-rf-test-id="abp-lotSize"]');
+    if (el) {
+      const text = el.textContent;
+      const val = parseFloat(text.replace(/[^0-9.]/g, ''));
+      if (!isNaN(val) && val > 0) {
+        // Convert acres to sq ft if the text contains "Acres" or "acres"
+        if (/acres?/i.test(text)) return Math.round(val * 43560);
+        return val;
+      }
     }
     return null;
   },

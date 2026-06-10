@@ -130,7 +130,7 @@ function createAnalysisDetails(listing) {
     appendParcelField(parcelRow, "Property name", listing.parcel.propertyName);
     appendParcelField(parcelRow, "Jurisdiction", listing.parcel.jurisdiction);
     appendParcelField(parcelRow, "Appraised value", formatCurrencyValue(listing.parcel.appraisedValue));
-    appendParcelField(parcelRow, "Lot area", formatSquareFeet(listing.parcel.lotAreaSqFt));
+    appendLotAreaField(parcelRow, listing.parcel.lotAreaSqFt, listing.lotSqft);
     appendParcelField(parcelRow, "Levy code", listing.parcel.levyCode);
     appendParcelField(parcelRow, "Units", formatOptionalCount(listing.parcel.numberOfUnits));
     appendParcelField(parcelRow, "Buildings", formatOptionalCount(listing.parcel.numberOfBuildings));
@@ -283,6 +283,40 @@ function appendParcelField(container, label, value) {
   const fieldValue = document.createElement("span");
   fieldValue.className = "parcel-field-value";
   fieldValue.textContent = String(value);
+
+  field.append(fieldLabel, fieldValue);
+  container.appendChild(field);
+}
+
+function appendLotAreaField(container, parcelSqFt, redfinSqFt) {
+  const parcelVal = Number(parcelSqFt);
+  const redfinVal = Number(redfinSqFt);
+  const hasParcel = Number.isFinite(parcelVal) && parcelVal > 0;
+  const hasRedfin = Number.isFinite(redfinVal) && redfinVal > 0;
+  if (!hasParcel && !hasRedfin) return;
+
+  const field = document.createElement("div");
+  field.className = "parcel-field";
+
+  const fieldLabel = document.createElement("span");
+  fieldLabel.className = "parcel-field-label";
+  fieldLabel.textContent = "Lot area";
+
+  const fieldValue = document.createElement("span");
+  fieldValue.className = "parcel-field-value";
+
+  if (hasParcel && hasRedfin) {
+    const diff = Math.abs(parcelVal - redfinVal);
+    const pct = diff / parcelVal;
+    if (pct > 0.05 && diff > 100) {
+      fieldValue.textContent = `${formatSquareFeet(parcelVal)} (KC) · ${formatSquareFeet(redfinVal)} (Redfin) ⚠`;
+      fieldValue.title = "Lot size differs between King County parcel data and Redfin listing";
+    } else {
+      fieldValue.textContent = formatSquareFeet(parcelVal);
+    }
+  } else {
+    fieldValue.textContent = formatSquareFeet(hasParcel ? parcelVal : redfinVal);
+  }
 
   field.append(fieldLabel, fieldValue);
   container.appendChild(field);

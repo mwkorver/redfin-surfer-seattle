@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Real Estate Due-Diligence Sidecar",
+  "name": "redfin-surfer.seattle",
   "version": "1.0",
-  "description": "Geographically scoped real estate due-diligence sidecar for Redfin.",
+  "description": "Redfin due-diligence side panel scoped to Seattle and King County, WA.",
   "permissions": [
     "activeTab",
     "sidePanel",
