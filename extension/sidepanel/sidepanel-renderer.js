@@ -16,8 +16,8 @@ function renderPortfolio() {
 }
 
 function compareListings(a, b) {
-  const aScore = getAggregateScore(a.report);
-  const bScore = getAggregateScore(b.report);
+  const aScore = getDisplayScore(a.report);
+  const bScore = getDisplayScore(b.report);
   if (aScore === null && bScore !== null) return 1;
   if (aScore !== null && bScore === null) return -1;
   if (aScore !== bScore) return (bScore || 0) - (aScore || 0);
@@ -25,7 +25,7 @@ function compareListings(a, b) {
 }
 
 function createPropertyCard(listing, index) {
-  const score = getAggregateScore(listing.report);
+  const score = getDisplayScore(listing.report);
   const hasReport = score !== null;
   const card = document.createElement("section");
   card.className = `property-card${expandedListings.has(listing.listingKey) ? " expanded" : ""}`;
@@ -178,7 +178,9 @@ function createAnalysisDetails(listing) {
 
     const topicStatus = document.createElement("span");
     topicStatus.className = "analysis-topic-status";
-    const weightLabel = `${Math.round(Number(topic.weight) * 100)}% weight`;
+    const weights = typeof scoringWeights !== "undefined" ? scoringWeights : {};
+    const displayWeight = weights[topic.key] != null ? weights[topic.key] : Math.round(Number(topic.weight) * 100);
+    const weightLabel = `${displayWeight}% weight`;
     topicStatus.textContent = topic.status ? `${topic.status} · ${weightLabel}` : weightLabel;
 
     const topicScore = document.createElement("span");

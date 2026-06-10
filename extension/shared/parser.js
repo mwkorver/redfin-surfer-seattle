@@ -61,6 +61,9 @@ const PropertyParser = {
     if (!data.mlsId) {
       data.mlsId = this.fallbackMlsId();
     }
+    if (!data.sqft) {
+      data.sqft = this.fallbackSqft();
+    }
 
     // Clean up coordinates
     if (data.geo) {
@@ -158,6 +161,13 @@ const PropertyParser = {
           extracted.price = parseFloat(String(offersObj.price).replace(/[^0-9.]/g, ''));
         }
         extracted.priceCurrency = offersObj.priceCurrency || 'USD';
+      }
+
+      // Parse floor size (living area sq ft)
+      if (obj.floorSize) {
+        const fs = obj.floorSize;
+        const raw = typeof fs === 'number' ? fs : (typeof fs === 'object' ? parseFloat(fs.value) : NaN);
+        if (!isNaN(raw) && raw > 0) extracted.sqft = raw;
       }
 
       results.push(extracted);
@@ -299,6 +309,18 @@ const PropertyParser = {
       }
     }
     
+    return null;
+  },
+
+  /**
+   * DOM Scraping Fallback: Home square footage (living area)
+   */
+  fallbackSqft() {
+    const rfSqFt = document.querySelector('[data-rf-test-id="abp-sqFt"] .statsValue, [data-rf-test-id="abp-sqFt"]');
+    if (rfSqFt) {
+      const val = parseFloat(rfSqFt.textContent.replace(/[^0-9.]/g, ''));
+      if (!isNaN(val) && val > 0) return val;
+    }
     return null;
   },
 

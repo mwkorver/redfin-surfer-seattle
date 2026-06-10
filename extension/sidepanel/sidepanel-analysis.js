@@ -13,6 +13,9 @@ function simulateLocalDiligence(listing) {
     const nearestStation = nearestStations[0] || null;
     const crimeScore = scoreCrime(crimes);
     const lightRailScore = scoreLightRailDistance(nearestStation?.distanceMeters);
+    const lotAreaScore = scoreLotArea(listing.parcel?.lotAreaSqFt);
+    const ppsf = (listing.sqft > 0 && listing.price > 0) ? listing.price / listing.sqft : null;
+    const pricePerSqftScore = scorePricePerSqft(ppsf);
 
     const topics = [
       createScoredTopic("crime", crimeScore, `${crimes.length} recent incidents`)
@@ -24,6 +27,19 @@ function simulateLocalDiligence(listing) {
         nearestStations.length
           ? formatNearestStationStatus(nearestStations)
           : "Location unavailable"
+      ));
+    }
+    if (lotAreaScore !== null) {
+      const sqftLabel = listing.parcel?.lotAreaSqFt
+        ? `${Math.round(listing.parcel.lotAreaSqFt).toLocaleString()} sq ft`
+        : "Lot size from parcel";
+      topics.push(createScoredTopic("lotArea", lotAreaScore, sqftLabel));
+    }
+    if (pricePerSqftScore !== null) {
+      topics.push(createScoredTopic(
+        "pricePerSqft",
+        pricePerSqftScore,
+        `$${Math.round(ppsf).toLocaleString()}/sq ft`
       ));
     }
 
@@ -422,6 +438,40 @@ function formatNearestStationSummary(stations) {
   return stations
     .map(station => `${station.name} (${formatDistanceMiles(station.distanceMiles)})`)
     .join(" and ");
+}
+
+function scoreLotArea(sqftValue) {
+  const sqft = Number(sqftValue);
+  if (!Number.isFinite(sqft) || sqft <= 0) return null;
+  const breakpoints = [
+    [0,      20],
+    [2000,   45],
+    [4000,   65],
+    [6000,   80],
+    [9600,   90],
+    [20000,  98],
+  ];
+  for (let i = breakpoints.length - 1; i >= 0; i--) {
+    if (sqft >= breakpoints[i][0]) return breakpoints[i][1];
+  }
+  return 20;
+}
+
+function scorePricePerSqft(ppsf) {
+  const val = Number(ppsf);
+  if (!Number.isFinite(val) || val <= 0) return null;
+  const breakpoints = [
+    [0,     95],
+    [300,   80],
+    [500,   62],
+    [700,   42],
+    [900,   25],
+    [1200,  10],
+  ];
+  for (let i = breakpoints.length - 1; i >= 0; i--) {
+    if (val >= breakpoints[i][0]) return breakpoints[i][1];
+  }
+  return 95;
 }
 
 function createScoredTopic(key, score, status) {

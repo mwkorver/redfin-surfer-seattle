@@ -4,6 +4,7 @@ let apiToken = "";
 let portfolioEtag = "";
 let apiConnectionValid = false;
 let backendSyncEnabled = true;
+let scoringWeights = { crime: 40, lightRail: 20, lotArea: 20, pricePerSqft: 20 };
 let connectionValidationTimer = null;
 let connectionValidationId = 0;
 let lightRailStationsPromise = null;
@@ -24,6 +25,14 @@ const inputApiUrl = document.getElementById("input-api-url");
 const inputApiToken = document.getElementById("input-api-token");
 const chkBackendSync = document.getElementById("chk-backend-sync");
 const connectionStatus = document.getElementById("connection-status");
+const weightCrimeInput = document.getElementById("weight-crime");
+const weightCrimeDisplay = document.getElementById("weight-crime-display");
+const weightLightRailInput = document.getElementById("weight-lightrail");
+const weightLightRailDisplay = document.getElementById("weight-lightrail-display");
+const weightLotAreaInput = document.getElementById("weight-lotarea");
+const weightLotAreaDisplay = document.getElementById("weight-lotarea-display");
+const weightPriceSqftInput = document.getElementById("weight-pricesqft");
+const weightPriceSqftDisplay = document.getElementById("weight-pricesqft-display");
 
 document.addEventListener("DOMContentLoaded", () => {
   loadState();
@@ -38,7 +47,8 @@ function loadState() {
     "aws_api_url",
     "aws_api_token",
     "backend_sync_enabled",
-    "mapPresent"
+    "mapPresent",
+    "scoring_weights"
   ], (res) => {
     updateMapStatusUI(res.mapPresent);
     portfolio = {};
@@ -59,6 +69,11 @@ function loadState() {
     if (res.backend_sync_enabled === undefined) {
       chrome.storage.local.set({ backend_sync_enabled: true });
     }
+
+    const saved = res.scoring_weights || {};
+    scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20 };
+    applyWeightInputs();
+
     chrome.storage.local.remove("auto_diligence_on_heart");
     updateConnectionStatus();
     scheduleConnectionValidation();
@@ -104,6 +119,34 @@ function setupEventListeners() {
       scheduleConnectionValidation();
       chrome.runtime.sendMessage({ action: "FLUSH_PENDING_BACKEND_DELETES" }).catch(() => {});
     }
+    renderPortfolio();
+  });
+
+  weightCrimeInput.addEventListener("input", () => {
+    scoringWeights.crime = Number(weightCrimeInput.value);
+    weightCrimeDisplay.textContent = `${scoringWeights.crime}%`;
+    chrome.storage.local.set({ scoring_weights: scoringWeights });
+    renderPortfolio();
+  });
+
+  weightLightRailInput.addEventListener("input", () => {
+    scoringWeights.lightRail = Number(weightLightRailInput.value);
+    weightLightRailDisplay.textContent = `${scoringWeights.lightRail}%`;
+    chrome.storage.local.set({ scoring_weights: scoringWeights });
+    renderPortfolio();
+  });
+
+  weightLotAreaInput.addEventListener("input", () => {
+    scoringWeights.lotArea = Number(weightLotAreaInput.value);
+    weightLotAreaDisplay.textContent = `${scoringWeights.lotArea}%`;
+    chrome.storage.local.set({ scoring_weights: scoringWeights });
+    renderPortfolio();
+  });
+
+  weightPriceSqftInput.addEventListener("input", () => {
+    scoringWeights.pricePerSqft = Number(weightPriceSqftInput.value);
+    weightPriceSqftDisplay.textContent = `${scoringWeights.pricePerSqft}%`;
+    chrome.storage.local.set({ scoring_weights: scoringWeights });
     renderPortfolio();
   });
 
@@ -180,6 +223,13 @@ function setupEventListeners() {
     if (changes.mapPresent) {
       updateMapStatusUI(changes.mapPresent.newValue);
     }
+
+    if (changes.scoring_weights) {
+      const saved = changes.scoring_weights.newValue || {};
+      scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20 };
+      applyWeightInputs();
+      renderPortfolio();
+    }
   });
 
   chrome.runtime.onMessage.addListener(request => {
@@ -187,6 +237,17 @@ function setupEventListeners() {
       scheduleDiligence(request.listing);
     }
   });
+}
+
+function applyWeightInputs() {
+  weightCrimeInput.value = String(scoringWeights.crime);
+  weightCrimeDisplay.textContent = `${scoringWeights.crime}%`;
+  weightLightRailInput.value = String(scoringWeights.lightRail);
+  weightLightRailDisplay.textContent = `${scoringWeights.lightRail}%`;
+  weightLotAreaInput.value = String(scoringWeights.lotArea);
+  weightLotAreaDisplay.textContent = `${scoringWeights.lotArea}%`;
+  weightPriceSqftInput.value = String(scoringWeights.pricePerSqft);
+  weightPriceSqftDisplay.textContent = `${scoringWeights.pricePerSqft}%`;
 }
 
 function schedulePortfolioEnrichment() {

@@ -62,6 +62,22 @@ function getAggregateScore(report) {
   return null;
 }
 
+function getDisplayScore(report) {
+  if (!report) return null;
+  const topics = Array.isArray(report.topics) ? report.topics : [];
+  if (!topics.length) {
+    if (hasNumericScore(report.aggregateScore)) return clampScore(Number(report.aggregateScore));
+    if (hasNumericScore(report.score)) return clampScore(Number(report.score));
+    return null;
+  }
+  const weights = typeof scoringWeights !== "undefined" ? scoringWeights : {};
+  const overridden = topics.map(topic => ({
+    ...topic,
+    weight: weights[topic.key] != null ? weights[topic.key] : topic.weight
+  }));
+  return calculateAggregateScore(overridden);
+}
+
 function hasNumericScore(value) {
   return value !== null && value !== "" && Number.isFinite(Number(value));
 }
@@ -181,6 +197,7 @@ globalThis.SidepanelModel = Object.freeze({
   calculateAggregateScore,
   isAnalysisOutOfSync,
   getAggregateScore,
+  getDisplayScore,
   hasNumericScore,
   formatTopicSummary,
   formatLocation,

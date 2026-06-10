@@ -67,6 +67,43 @@
           </div>
         </div>
       </details>
+
+      <details class="settings-details">
+        <summary class="settings-summary">
+          <span>Scoring weights</span>
+          <span class="arrow">▾</span>
+        </summary>
+        <div class="settings-content">
+          <div class="weight-row">
+            <div class="weight-label-row">
+              <span class="weight-topic-label">Crime</span>
+              <span id="weight-crime-display" class="weight-value">40%</span>
+            </div>
+            <input type="range" id="weight-crime" class="weight-slider" min="0" max="100" step="1" value="40">
+          </div>
+          <div class="weight-row">
+            <div class="weight-label-row">
+              <span class="weight-topic-label">Light Rail</span>
+              <span id="weight-lightrail-display" class="weight-value">20%</span>
+            </div>
+            <input type="range" id="weight-lightrail" class="weight-slider" min="0" max="100" step="1" value="20">
+          </div>
+          <div class="weight-row">
+            <div class="weight-label-row">
+              <span class="weight-topic-label">Lot Area</span>
+              <span id="weight-lotarea-display" class="weight-value">20%</span>
+            </div>
+            <input type="range" id="weight-lotarea" class="weight-slider" min="0" max="100" step="1" value="20">
+          </div>
+          <div class="weight-row">
+            <div class="weight-label-row">
+              <span class="weight-topic-label">Price/Sq.Ft.</span>
+              <span id="weight-pricesqft-display" class="weight-value">20%</span>
+            </div>
+            <input type="range" id="weight-pricesqft" class="weight-slider" min="0" max="100" step="1" value="20">
+          </div>
+        </div>
+      </details>
     </footer>
   </div>
 

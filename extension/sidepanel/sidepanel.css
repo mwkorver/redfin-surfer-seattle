@@ -626,3 +626,40 @@ body {
   color: var(--good);
   filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.5));
 }
+
+.settings-details + .settings-details {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.weight-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.weight-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.weight-topic-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.weight-value {
+  color: var(--secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.weight-slider {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
