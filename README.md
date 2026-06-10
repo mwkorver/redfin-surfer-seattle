@@ -1,5 +1,11 @@
 # redfin-surfer.seattle
 
+## Status
+
+This repository is published for reference and transparency.
+
+I am not currently accepting issues, pull requests, feature requests, or support questions. You are welcome to fork the code under the terms of the license.
+
 A Chrome extension that adds a due-diligence side panel to Redfin property listings, scoped to Seattle and King County, WA. Heart a listing on Redfin and the panel automatically scores it across five topics, pulling data from several public sources.
 
 The `.seattle` suffix is intentional — the tool is designed as a city-specific instance of a reusable pattern. A `redfin-surfer.la` or `redfin-surfer.nyc` would wire up different data sources for the same side panel framework.
