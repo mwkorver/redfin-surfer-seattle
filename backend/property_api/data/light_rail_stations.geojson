@@ -1,0 +1,978 @@
+{
+  "features": [
+    {
+      "geometry": {
+        "coordinates": [
+          -122.452848,
+          47.256925
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "6th Ave",
+        "stationId": "T21",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/6th-ave-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.297714,
+          47.422703
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Angle Lake",
+        "stationId": "S01",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/angle-lake-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.311533,
+          47.579328
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Beacon Hill",
+        "stationId": "C19",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/beacon-hill-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.16564,
+          47.624448
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "BelRed",
+        "stationId": "E23",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/belred-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.192084,
+          47.615223
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Bellevue Downtown",
+        "stationId": "E15",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/bellevue-downtown-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.320195,
+          47.61906
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Capitol Hill",
+        "stationId": "N03",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/capitol-hill-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.292692,
+          47.559733
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Columbia City",
+        "stationId": "C25",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/columbia-city-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.438552,
+          47.249496
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "Convention Center",
+        "stationId": "T07",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/convention-center-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.11848,
+          47.671645
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Downtown Redmond",
+        "stationId": "E31",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/downtown-redmond-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.191147,
+          47.608188
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "East Main",
+        "stationId": "E11",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/east-main-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.303829,
+          47.315903
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Federal Way Downtown",
+        "stationId": "S07",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/federal-way-downtown-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.451665,
+          47.251758
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "Hilltop District",
+        "stationId": "T23",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/hilltop-district-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.327992,
+          47.598355
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Int'l Dist/Chinatown",
+        "stationId": "C09",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/international-district-chinatown-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.304508,
+          47.590299
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Judkins Park",
+        "stationId": "E01",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/judkins-park-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.294399,
+          47.389552
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Kent Des Moines",
+        "stationId": "S03",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/kent-des-moines-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.294779,
+          47.815637
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Lynnwood City Center",
+        "stationId": "N23",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/lynnwood-city-center-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.1098,
+          47.667263
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Marymoor Village",
+        "stationId": "E29",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/marymoor-village-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.233232,
+          47.588198
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Mercer Island",
+        "stationId": "E07",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/mercer-island-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.297679,
+          47.57655
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Mount Baker",
+        "stationId": "C23",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/mount-baker-station-transit-center",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.314788,
+          47.785057
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Mountlake Terrace",
+        "stationId": "N19",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/mountlake-terrace-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.32829,
+          47.703028
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Northgate",
+        "stationId": "N11",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/northgate-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.440421,
+          47.257746
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "Old City Hall",
+        "stationId": "T13",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/old-city-hall-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.281563,
+          47.537987
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Othello",
+        "stationId": "C27",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/othello-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.13892,
+          47.63631
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Overlake Village",
+        "stationId": "E25",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/overlake-village-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.331216,
+          47.60256
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Pioneer Square",
+        "stationId": "C07",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/pioneer-square-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.279391,
+          47.522394
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Rainier Beach",
+        "stationId": "C29",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/rainier-beach-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.133628,
+          47.644842
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Redmond Technology",
+        "stationId": "E27",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/redmond-technology-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.315976,
+          47.676595
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Roosevelt",
+        "stationId": "N09",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/roosevelt-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.434202,
+          47.239081
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "S 25th",
+        "stationId": "T03",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/s-25th-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.442723,
+          47.261319
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "S 4th",
+        "stationId": "T15",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/s-4th-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.32739,
+          47.581074
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "SODO",
+        "stationId": "C15",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/sodo-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.296898,
+          47.445381
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "SeaTac/Airport",
+        "stationId": "C37",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/seatac-airport-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.322889,
+          47.764067
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Shoreline North/185th",
+        "stationId": "N17",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/shoreline-north-185th-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.325227,
+          47.736095
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Shoreline South/148th",
+        "stationId": "N15",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/shoreline-south-148th-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.190396,
+          47.586556
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "South Bellevue",
+        "stationId": "E09",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/south-bellevue-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.178573,
+          47.623773
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Spring District",
+        "stationId": "E21",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/spring-district-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.450187,
+          47.24528
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "St Joseph",
+        "stationId": "T25",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/st-joseph-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.327172,
+          47.591108
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Stadium",
+        "stationId": "C13",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/stadium-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.448999,
+          47.263869
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "Stadium District",
+        "stationId": "T17",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/stadium-district-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.297391,
+          47.359388
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Star Lake",
+        "stationId": "S05",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/star-lake-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.33602,
+          47.60781
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Symphony",
+        "stationId": "C05",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/symphony-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.428118,
+          47.239868
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "Tacoma Dome",
+        "stationId": "T01",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/tacoma-dome-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.453564,
+          47.260083
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "Tacoma General",
+        "stationId": "T19",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/tacoma-general-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.439239,
+          47.252534
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "Theater District",
+        "stationId": "T09",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/theater-district-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.287996,
+          47.464031
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Tukwila Int'l Blvd",
+        "stationId": "C35",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/tukwila-international-boulevard-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.314132,
+          47.660301
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "U District",
+        "stationId": "N07",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/u-district-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.436623,
+          47.244865
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "T Line"
+        ],
+        "name": "Union Station",
+        "stationId": "T05",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/union-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.303763,
+          47.649815
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Univ of Washington",
+        "stationId": "N05",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/university-washington-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.33672,
+          47.611572
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Westlake",
+        "stationId": "C03",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/westlake-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.183762,
+          47.617967
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "2 Line"
+        ],
+        "name": "Wilburton",
+        "stationId": "E19",
+        "url": "https://www.soundtransit.org/ride-with-us/stops-stations/wilburton-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    }
+  ],
+  "metadata": {
+    "feedEndDate": "20260828",
+    "feedStartDate": "20260414",
+    "feedVersion": "SC-Spring-2026.9",
+    "generatedAt": "2026-06-10T03:32:27.409547Z",
+    "publisher": "Sound Transit",
+    "routeType": 0,
+    "source": "https://www.soundtransit.org/GTFS-rail/40_gtfs.zip"
+  },
+  "name": "sound-transit-link-light-rail-stations",
+  "type": "FeatureCollection"
+}

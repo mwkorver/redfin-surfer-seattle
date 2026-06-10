@@ -4,7 +4,9 @@
   "description": "Playwright verification workspace for Real Estate Diligence Sidecar",
   "main": "test_extension.js",
   "scripts": {
-    "start": "node test_extension.js"
+    "start": "node test_extension.js",
+    "test": "node --test extension/tests/*.test.js",
+    "test:extension": "node --test extension/tests/*.test.js"
   },
   "dependencies": {
     "playwright": "^1.44.0"

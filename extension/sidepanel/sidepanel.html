@@ -45,25 +45,25 @@
     <footer class="app-footer">
       <details class="settings-details">
         <summary class="settings-summary">
-          <span>Analysis settings</span>
+          <span>Backend settings</span>
           <span class="arrow">▾</span>
         </summary>
         <div class="settings-content">
           <div class="input-group">
-            <label for="input-api-url">API Gateway URL</label>
-            <input type="url" id="input-api-url" placeholder="https://api.example.com/diligence">
+            <label for="input-api-url">Lambda Function URL</label>
+            <input type="url" id="input-api-url" placeholder="https://example.lambda-url.us-west-2.on.aws/">
           </div>
           <div class="input-group">
             <label for="input-api-token">API Token (Sync Token)</label>
             <input type="password" id="input-api-token" placeholder="Enter bearer token">
           </div>
           <label class="checkbox-container">
-            <input type="checkbox" id="chk-auto-diligence">
+            <input type="checkbox" id="chk-backend-sync">
             <span class="checkmark"></span>
-            Run analysis when a property is hearted
+            Sync completed analysis to Lambda/S3
           </label>
           <div class="settings-status">
-            Connection: <span id="connection-status" class="status-indicator disconnected">Local analysis</span>
+            Backend: <span id="connection-status" class="status-indicator disconnected">Checking...</span>
           </div>
         </div>
       </details>
@@ -71,6 +71,11 @@
   </div>
 
   <script src="../shared/scoring.js"></script>
+  <script src="sidepanel-model.js"></script>
+  <script src="sidepanel-api.js"></script>
+  <script src="sidepanel-analysis.js"></script>
+  <script src="sidepanel-storage.js"></script>
+  <script src="sidepanel-renderer.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

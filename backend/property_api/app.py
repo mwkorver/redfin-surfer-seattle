@@ -2,6 +2,7 @@ import base64
 import binascii
 import hmac
 import json
+import math
 import os
 import re
 from datetime import datetime, timezone
@@ -14,12 +15,23 @@ BUCKET = os.environ.get("PROPERTY_BUCKET", "")
 SYNC_TOKEN = os.environ.get("SYNC_TOKEN", "")
 LOCAL_PARQUET = "/tmp/portfolio.parquet"
 PARQUET_KEY = "properties/portfolio.parquet"
+LIGHT_RAIL_STATIONS_KEY = os.environ.get(
+    "LIGHT_RAIL_STATIONS_KEY",
+    "reference/light_rail_stations.geojson",
+)
+LOCAL_LIGHT_RAIL_STATIONS = "/tmp/light_rail_stations.geojson"
+BUNDLED_LIGHT_RAIL_STATIONS = os.path.join(
+    os.path.dirname(__file__),
+    "data",
+    "light_rail_stations.geojson",
+)
 MAX_BODY_BYTES = 256 * 1024
 LISTING_KEY_PATTERN = re.compile(
     r"^redfin/[A-Za-z0-9._~%+-]+(?:/[A-Za-z0-9._~%+-]+)*/home/(\d+)$"
 )
 
 s3 = boto3.client("s3")
+light_rail_stations_etag = None
 
 
 def lambda_handler(event, _context):
@@ -36,6 +48,12 @@ def lambda_handler(event, _context):
         # Normalize routing to support root path and named routes
         if method == "GET" and (path == "/properties" or path == "/properties/"):
             return list_properties()
+
+        if method == "GET" and path in {"/stations", "/stations/"}:
+            return list_light_rail_stations()
+
+        if method == "GET" and path in {"/nearest-stations", "/nearest-stations/"}:
+            return nearest_light_rail_stations(event)
 
         if path not in {"/", "/property", "/property/"}:
             return error_response(404, "route_not_found", "Route does not exist.")
@@ -78,6 +96,117 @@ def is_authorized(event):
     if not authorization.startswith(prefix):
         return False
     return hmac.compare_digest(authorization[len(prefix):], SYNC_TOKEN)
+
+
+def load_light_rail_stations():
+    global light_rail_stations_etag
+
+    try:
+        head = s3.head_object(Bucket=BUCKET, Key=LIGHT_RAIL_STATIONS_KEY)
+        etag = head["ETag"]
+        if etag != light_rail_stations_etag or not os.path.exists(LOCAL_LIGHT_RAIL_STATIONS):
+            result = s3.get_object(Bucket=BUCKET, Key=LIGHT_RAIL_STATIONS_KEY)
+            with open(LOCAL_LIGHT_RAIL_STATIONS, "wb") as station_file:
+                station_file.write(result["Body"].read())
+            light_rail_stations_etag = result.get("ETag", etag)
+
+        with open(LOCAL_LIGHT_RAIL_STATIONS, encoding="utf-8") as station_file:
+            collection = json.load(station_file)
+        return collection, {
+            "storage": "s3",
+            "bucket": BUCKET,
+            "key": LIGHT_RAIL_STATIONS_KEY,
+            "etag": light_rail_stations_etag,
+        }
+    except (ClientError, OSError, json.JSONDecodeError) as exc:
+        print(f"[WARNING] Unable to load station data from S3: {str(exc)}")
+
+    with open(BUNDLED_LIGHT_RAIL_STATIONS, encoding="utf-8") as station_file:
+        collection = json.load(station_file)
+    return collection, {
+        "storage": "bundled",
+        "key": "data/light_rail_stations.geojson",
+    }
+
+
+def list_light_rail_stations():
+    collection, storage = load_light_rail_stations()
+    result = dict(collection)
+    result["storage"] = storage
+    headers = {"ETag": storage["etag"]} if storage.get("etag") else None
+    return response(200, result, headers)
+
+
+def nearest_light_rail_stations(event):
+    query = event.get("queryStringParameters") or {}
+    latitude = parse_coordinate(query.get("latitude"), "latitude", -90, 90)
+    longitude = parse_coordinate(query.get("longitude"), "longitude", -180, 180)
+    try:
+        limit = min(10, max(1, int(query.get("limit", 2))))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Query parameter 'limit' must be an integer.") from exc
+
+    collection, storage = load_light_rail_stations()
+    stations = []
+    for feature in collection.get("features") or []:
+        coordinates = (feature.get("geometry") or {}).get("coordinates") or []
+        if len(coordinates) < 2:
+            continue
+        try:
+            distance_meters = haversine_distance_meters(
+                latitude,
+                longitude,
+                float(coordinates[1]),
+                float(coordinates[0]),
+            )
+        except (TypeError, ValueError):
+            continue
+        properties = feature.get("properties") or {}
+        stations.append({
+            "stationId": properties.get("stationId", ""),
+            "name": properties.get("name", "Unknown station"),
+            "lines": properties.get("lines") or [],
+            "url": properties.get("url", ""),
+            "distanceMeters": round(distance_meters),
+            "distanceMiles": round(distance_meters / 1609.344, 2),
+        })
+
+    stations.sort(key=lambda station: station["distanceMeters"])
+    return response(200, {
+        "stations": stations[:limit],
+        "dataset": collection.get("metadata") or {},
+        "storage": storage,
+    })
+
+
+def parse_coordinate(value, name, minimum, maximum):
+    try:
+        coordinate = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Query parameter '{name}' must be a number.") from exc
+    if not math.isfinite(coordinate) or not minimum <= coordinate <= maximum:
+        raise ValueError(
+            f"Query parameter '{name}' must be between {minimum} and {maximum}."
+        )
+    return coordinate
+
+
+def haversine_distance_meters(latitude_a, longitude_a, latitude_b, longitude_b):
+    earth_radius_meters = 6371008.8
+    latitude_delta = math.radians(latitude_b - latitude_a)
+    longitude_delta = math.radians(longitude_b - longitude_a)
+    start_latitude = math.radians(latitude_a)
+    end_latitude = math.radians(latitude_b)
+    haversine = (
+        math.sin(latitude_delta / 2) ** 2
+        + math.cos(start_latitude)
+        * math.cos(end_latitude)
+        * math.sin(longitude_delta / 2) ** 2
+    )
+    return earth_radius_meters * 2 * math.atan2(
+        math.sqrt(haversine),
+        math.sqrt(1 - haversine),
+    )
 
 
 def download_portfolio():

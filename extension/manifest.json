@@ -27,7 +27,9 @@
         "shared/parser.js",
         "content.js"
       ],
-      "run_at": "document_end"
+      "run_at": "document_end",
+      "all_frames": true,
+      "match_origin_as_fallback": true
     }
   ],
   "side_panel": {

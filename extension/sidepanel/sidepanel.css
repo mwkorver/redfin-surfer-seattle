@@ -341,6 +341,71 @@ body {
   font-size: 11px;
 }
 
+.light-rail-details {
+  padding: 9px 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.light-rail-heading {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.light-rail-station {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.light-rail-station-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.light-rail-station-name {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.light-rail-station-lines,
+.light-rail-source,
+.light-rail-unavailable {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.light-rail-station-distance {
+  flex: 0 0 auto;
+  color: var(--secondary);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.light-rail-source {
+  padding-top: 4px;
+}
+
+.permits-search-link {
+  flex: 0 0 auto;
+  color: var(--secondary);
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.permits-search-link:hover {
+  text-decoration: underline;
+}
+
 .analysis-topic {
   display: flex;
   align-items: center;
@@ -517,40 +582,28 @@ body {
 
 .action-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 10px 2px 2px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.register-button {
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 6px;
-  background: rgba(147, 169, 255, 0.12);
-  color: #93a9ff;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  transition: all 0.2s ease;
-}
-
-.register-button:hover:not(:disabled) {
-  border-color: #93a9ff;
-  background: rgba(147, 169, 255, 0.22);
-  color: #f7f8fa;
-}
-
-.register-button:disabled {
-  border-color: var(--border);
-  background: transparent;
+.sync-status {
   color: var(--muted);
-  cursor: not-allowed;
-}
-
-.registered-status {
-  color: var(--good);
   font-size: 11px;
   font-weight: 700;
+}
+
+.sync-status.syncing,
+.sync-status.pending {
+  color: #93a9ff;
+}
+
+.sync-status.synced {
+  color: var(--good);
+}
+
+.sync-status.failed {
+  color: var(--bad);
 }
 
 .map-status-icon {

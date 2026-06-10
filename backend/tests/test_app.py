@@ -25,6 +25,12 @@ from property_api import app  # noqa: E402
 
 LISTING_KEY = "redfin/WA/Seattle/2544-NE-90th-St-98115/home/318529"
 SECOND_LISTING_KEY = "redfin/WA/Seattle/1200-2nd-Ave-98101/home/999999"
+STATION_DATA_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "data",
+    "light_rail_stations.geojson",
+)
 
 
 class FakeS3:
@@ -99,9 +105,17 @@ def record(score=86, listing_key=LISTING_KEY):
 class PropertyApiTests(unittest.TestCase):
     def setUp(self):
         app.s3 = FakeS3()
-        if os.path.exists(app.LOCAL_PARQUET):
+        with open(STATION_DATA_PATH, "rb") as station_file:
+            app.s3.objects[app.LIGHT_RAIL_STATIONS_KEY] = {
+                "body": station_file.read(),
+                "etag": '"station-etag"',
+            }
+        app.light_rail_stations_etag = None
+        for local_path in [app.LOCAL_PARQUET, app.LOCAL_LIGHT_RAIL_STATIONS]:
+            if not os.path.exists(local_path):
+                continue
             try:
-                os.remove(app.LOCAL_PARQUET)
+                os.remove(local_path)
             except OSError:
                 pass
 
@@ -222,6 +236,72 @@ class PropertyApiTests(unittest.TestCase):
         request["headers"] = {}
         result = app.lambda_handler(request, None)
         self.assertEqual(result["statusCode"], 401)
+
+    def test_lists_s3_station_data_with_provenance(self):
+        result = app.lambda_handler(
+            event("GET", path="/stations", key=None),
+            None,
+        )
+
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["headers"]["ETag"], '"station-etag"')
+        collection = json.loads(result["body"])
+        self.assertGreaterEqual(len(collection["features"]), 40)
+        self.assertEqual(collection["metadata"]["publisher"], "Sound Transit")
+        self.assertEqual(collection["storage"]["storage"], "s3")
+        self.assertEqual(collection["storage"]["key"], app.LIGHT_RAIL_STATIONS_KEY)
+
+    def test_returns_nearest_two_stations(self):
+        request = event("GET", path="/nearest-stations", key=None)
+        request["queryStringParameters"] = {
+            "latitude": "47.676091",
+            "longitude": "-122.3095326",
+            "limit": "2",
+        }
+
+        result = app.lambda_handler(request, None)
+
+        self.assertEqual(result["statusCode"], 200)
+        body = json.loads(result["body"])
+        self.assertEqual(
+            [station["name"] for station in body["stations"]],
+            ["Roosevelt", "U District"],
+        )
+        self.assertLess(
+            body["stations"][0]["distanceMeters"],
+            body["stations"][1]["distanceMeters"],
+        )
+        self.assertEqual(body["dataset"]["publisher"], "Sound Transit")
+        self.assertEqual(body["storage"]["storage"], "s3")
+
+    def test_rejects_invalid_station_coordinates(self):
+        request = event("GET", path="/nearest-stations", key=None)
+        request["queryStringParameters"] = {
+            "latitude": "north",
+            "longitude": "-122.3",
+        }
+
+        result = app.lambda_handler(request, None)
+
+        self.assertEqual(result["statusCode"], 400)
+        self.assertIn("latitude", json.loads(result["body"])["message"])
+
+    def test_uses_bundled_station_fallback(self):
+        app.s3.objects.pop(app.LIGHT_RAIL_STATIONS_KEY)
+        original_path = app.BUNDLED_LIGHT_RAIL_STATIONS
+        app.BUNDLED_LIGHT_RAIL_STATIONS = STATION_DATA_PATH
+        try:
+            result = app.lambda_handler(
+                event("GET", path="/stations", key=None),
+                None,
+            )
+        finally:
+            app.BUNDLED_LIGHT_RAIL_STATIONS = original_path
+
+        self.assertEqual(result["statusCode"], 200)
+        collection = json.loads(result["body"])
+        self.assertEqual(collection["storage"]["storage"], "bundled")
+        self.assertGreaterEqual(len(collection["features"]), 40)
 
 
 if __name__ == "__main__":

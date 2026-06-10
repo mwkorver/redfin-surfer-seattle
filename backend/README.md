@@ -18,6 +18,8 @@ Authorization: Bearer <sync-token>
 ```text
 GET    /properties
 GET    /property?key=redfin/WA/Seattle/.../home/318529
+GET    /stations
+GET    /nearest-stations?latitude=47.676091&longitude=-122.309533&limit=2
 POST   /property
 PUT    /property
 DELETE /property?key=redfin/WA/Seattle/.../home/318529
@@ -61,3 +63,31 @@ python3 -m unittest discover -s tests -v
 
 The shared bearer token is appropriate only for a personal deployment. A
 multi-user service should use per-user identity and authorization.
+
+## Light Rail Stations
+
+`data/light_rail_stations.geojson` contains active Sound Transit Link stations
+derived from the official GTFS rail feed. Platform stops are collapsed into one
+parent-station feature with the serving lines listed in `properties.lines`.
+
+Refresh the layer with:
+
+```bash
+cd backend
+python3 scripts/download_light_rail_stations.py
+```
+
+The refresh command also updates the Lambda and Chrome extension bundled
+copies.
+
+Upload the refreshed canonical layer before deployment:
+
+```bash
+aws s3 cp data/light_rail_stations.geojson \
+  s3://redfin-surfer-<your-account-id>-us-west-2-an/reference/light_rail_stations.geojson \
+  --content-type application/geo+json
+```
+
+Lambda checks the S3 object's ETag and caches the current layer in `/tmp`.
+The generated layer is also bundled into the Lambda artifact at
+`data/light_rail_stations.geojson` as a fallback when S3 is unavailable.

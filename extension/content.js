@@ -4,6 +4,10 @@ function isPropertyDetailPage() {
   return path.includes('/home/');
 }
 
+function isTopFrame() {
+  return window === window.top;
+}
+
 // Helper to find the closest element representing a favorite/heart button (button or custom div)
 function findHeartButton(target) {
   if (!target) return null;
@@ -41,11 +45,46 @@ function findHeartButton(target) {
   return null;
 }
 
+function findHeartButtonFromEvent(event) {
+  const direct = findHeartButton(event.target);
+  if (direct) return direct;
+
+  const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+  for (const node of path) {
+    if (!(node instanceof Element)) continue;
+    const heartButton = findHeartButton(node);
+    if (heartButton) return heartButton;
+  }
+  return null;
+}
+
 // Helper to find the listing card container and its primary link for a given heart button
-function findCardContainer(button) {
+function findCardContainer(button, eventPath = []) {
   if (!button) return null;
-  
-  let card = button.parentElement;
+
+  const pathElements = eventPath.filter(node => node instanceof Element);
+  const directCandidates = [button, ...pathElements];
+  for (const candidate of directCandidates) {
+    const result = findSingleListingContainer(candidate);
+    if (result) return result;
+  }
+
+  let popup = button.closest(
+    '[role="dialog"], [role="article"], [data-rf-test-id*="map"], [class*="MapCard"], [class*="mapCard"], [class*="Popup"], [class*="popup"]'
+  );
+  while (popup && popup !== document.body) {
+    const result = findSingleListingContainer(popup);
+    if (result) return result;
+    popup = popup.parentElement;
+  }
+
+  return findNearestListingContainer(button);
+}
+
+function findSingleListingContainer(start) {
+  if (!start) return null;
+
+  let card = start;
   let bestCard = null;
   let firstLinkHref = null;
   while (card && card !== document.body) {
@@ -73,14 +112,71 @@ function findCardContainer(button) {
   
   if (!bestCard) return null;
   
-  const link = bestCard.querySelector('a[href*="/home/"]');
+  const link = getUniqueListingLinks(bestCard)[0];
   return { card: bestCard, link: link };
+}
+
+function findNearestListingContainer(button) {
+  const links = Array.from(document.querySelectorAll('a[href*="/home/"]'))
+    .filter(link => isElementVisible(link));
+  if (!links.length) return null;
+
+  const buttonRect = button.getBoundingClientRect();
+  const buttonX = buttonRect.left + buttonRect.width / 2;
+  const buttonY = buttonRect.top + buttonRect.height / 2;
+  let nearest = null;
+  let nearestDistance = Infinity;
+
+  links.forEach(link => {
+    const rect = link.getBoundingClientRect();
+    const linkX = rect.left + rect.width / 2;
+    const linkY = rect.top + rect.height / 2;
+    const distance = Math.hypot(linkX - buttonX, linkY - buttonY);
+    if (distance < nearestDistance) {
+      nearest = link;
+      nearestDistance = distance;
+    }
+  });
+
+  if (!nearest || nearestDistance > 700) return null;
+  const card = findCommonListingContainer(button, nearest) || nearest.parentElement;
+  return card ? { card, link: nearest } : null;
+}
+
+function findCommonListingContainer(button, link) {
+  let node = button.parentElement;
+  while (node && node !== document.body) {
+    if (node.contains(link)) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+function getUniqueListingLinks(container) {
+  const seen = new Set();
+  return Array.from(container.querySelectorAll('a[href*="/home/"]')).filter(link => {
+    const key = getRedfinListingKey(link.href);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isElementVisible(element) {
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+  return rect.width > 0 &&
+    rect.height > 0 &&
+    style.display !== "none" &&
+    style.visibility !== "hidden";
 }
 
 // Debounce helper to prevent multiple rapid runs
 let extractTimeout = null;
 
 function runAndSend(delay = 800) {
+  if (!isTopFrame()) return;
+
   if (extractTimeout) {
     clearTimeout(extractTimeout);
   }
@@ -133,6 +229,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("[Diligence Sidecar] Content script received message:", request.action);
   
   if (request.action === "GET_CURRENT_LISTING") {
+    if (!isTopFrame()) return false;
     try {
       if (!isPropertyDetailPage()) {
         sendResponse({ success: true, data: null });
@@ -156,6 +253,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: false, error: e.message });
     }
   } else if (request.action === "PAGE_NAVIGATED") {
+    if (!isTopFrame()) return false;
     // SPA navigation happened, wait slightly for the DOM to render new info
     runAndSend(1200);
     sendResponse({ success: true });
@@ -171,11 +269,19 @@ document.addEventListener('click', (e) => {
     if (!target) return;
 
     // Check if the clicked button looks like a Redfin Save/Favorite button
-    const button = findHeartButton(target);
+    const eventPath = typeof e.composedPath === "function" ? e.composedPath() : [];
+    const button = findHeartButtonFromEvent(e);
     const isHeartButton = !!button;
 
     if (isHeartButton) {
-      if (isPropertyDetailPage()) {
+      const mapCardInfo = isMapPresentOnPage()
+        ? findCardContainer(button, eventPath)
+        : null;
+
+      if (mapCardInfo) {
+        handleListingCardHeartToggle(button, mapCardInfo);
+      } else if (isPropertyDetailPage()) {
+        const previousHeartState = PropertyParser.getPageHeartState();
         console.log("[Diligence Sidecar] User clicked Save/Heart button on listing details page.");
         // Open the panel from the user gesture, then re-evaluate after Redfin applies the state.
         chrome.runtime.sendMessage({
@@ -184,52 +290,25 @@ document.addEventListener('click', (e) => {
           console.log("[Diligence Sidecar] Heart clicked notification deferred:", err.message);
         });
 
-        setTimeout(() => {
-          const heartState = PropertyParser.getPageHeartState();
+        waitForPageHeartState(previousHeartState).then(heartState => {
           if (heartState === "saved") {
             runAndSend(0);
-          } else if (heartState === "unsaved") {
+          } else if (
+            heartState === "unsaved" ||
+            (previousHeartState === "saved" && heartState === "unknown")
+          ) {
             chrome.runtime.sendMessage({
               action: "REMOVE_HEARTED_LISTING",
               url: window.location.href
             }).catch(() => {});
           }
-        }, 350);
+        });
       } else {
-        const containerInfo = findCardContainer(button);
+        const containerInfo = findCardContainer(button, eventPath);
         if (containerInfo) {
-          const { card, link } = containerInfo;
-          console.log("[Diligence Sidecar] Intercepted heart click on search card.");
-          
-          // Wait briefly for Redfin state toggle to apply
-          setTimeout(() => {
-            const label = (button.getAttribute('aria-label') || '').toLowerCase();
-            const text = button.innerText.toLowerCase();
-            const isSaved = 
-              label.includes('remove') || 
-              label.includes('unfavorite') || 
-              text.includes('favorited') ||
-              button.classList.contains('is-favorite') ||
-              button.getAttribute('aria-pressed') === 'true' ||
-              button.getAttribute('aria-checked') === 'true';
-
-            if (isSaved) {
-              const cardData = parseListingCard(card);
-              if (cardData) {
-                console.log("[Diligence Sidecar] Parsed search card data:", cardData);
-                // Trigger auto-open sidebar
-                chrome.runtime.sendMessage({ action: "HEART_CLICKED" }).catch(() => {});
-                // Send listing details to side panel
-                chrome.runtime.sendMessage({ action: "NEW_LISTING_DETECTED", data: cardData }).catch(() => {});
-              }
-            } else {
-              console.log("[Diligence Sidecar] Search card was removed from saved properties.");
-              chrome.runtime.sendMessage({
-                action: "REMOVE_HEARTED_LISTING",
-                url: link.href
-              }).catch(() => {});
-            }
-          }, 350);
+          handleListingCardHeartToggle(button, containerInfo);
+        } else {
+          console.warn("[Diligence Sidecar] Heart click did not resolve to a Redfin listing.");
         }
       }
     }
@@ -237,6 +316,116 @@ document.addEventListener('click', (e) => {
     console.error("[Diligence Sidecar] Error in click listener:", err);
   }
 }, true); // useCapture = true to intercept stopped event propagation
+
+function handleListingCardHeartToggle(button, containerInfo) {
+  const { card, link } = containerInfo;
+  const listingKey = getRedfinListingKey(link.href);
+  const wasSaved = isHeartButtonSaved(button);
+  console.log("[Diligence Sidecar] Intercepted heart click on listing card:", listingKey);
+
+  waitForCardHeartState(link.href, wasSaved).then(observedState => {
+    const isSaved = observedState === null || observedState === wasSaved
+      ? !wasSaved
+      : observedState;
+
+    if (isSaved) {
+      const cardData = parseListingCard(card);
+      if (cardData) {
+        observedSavedListings.add(listingKey);
+        console.log("[Diligence Sidecar] Parsed listing card data:", cardData);
+        chrome.runtime.sendMessage({ action: "HEART_CLICKED" }).catch(() => {});
+        chrome.runtime.sendMessage({
+          action: "NEW_LISTING_DETECTED",
+          data: cardData
+        }).catch(() => {});
+      }
+    } else if (wasSaved) {
+      observedSavedListings.delete(listingKey);
+      console.log("[Diligence Sidecar] Listing card was removed from saved properties.");
+      chrome.runtime.sendMessage({
+        action: "REMOVE_HEARTED_LISTING",
+        url: link.href
+      }).catch(() => {});
+    }
+  });
+}
+
+function waitForPageHeartState(previousState) {
+  const delays = [350, 800, 1500];
+
+  return new Promise(resolve => {
+    const check = index => {
+      setTimeout(() => {
+        const state = PropertyParser.getPageHeartState();
+        if (state !== "unknown" && state !== previousState) {
+          resolve(state);
+        } else if (index === delays.length - 1) {
+          resolve(state);
+        } else {
+          check(index + 1);
+        }
+      }, delays[index]);
+    };
+    check(0);
+  });
+}
+
+function isHeartButtonSaved(button) {
+  if (!button) return false;
+  const label = (button.getAttribute('aria-label') || '').toLowerCase();
+  const text = (button.innerText || "").toLowerCase();
+  return label.includes('remove') ||
+    label.includes('unfavorite') ||
+    label.includes('saved') ||
+    text.includes('favorited') ||
+    text.includes('saved') ||
+    button.classList.contains('is-favorite') ||
+    button.classList.contains('active') ||
+    button.getAttribute('aria-pressed') === 'true' ||
+    button.getAttribute('aria-checked') === 'true';
+}
+
+function waitForCardHeartState(listingUrl, previousSaved) {
+  const delays = [350, 800, 1500];
+
+  return new Promise(resolve => {
+    const check = index => {
+      setTimeout(() => {
+        const button = findCardHeartButton(listingUrl);
+        if (button) {
+          const saved = isHeartButtonSaved(button);
+          if (saved !== previousSaved || index === delays.length - 1) {
+            resolve(saved);
+            return;
+          }
+        } else if (index === delays.length - 1) {
+          resolve(null);
+          return;
+        }
+        check(index + 1);
+      }, delays[index]);
+    };
+    check(0);
+  });
+}
+
+function findCardHeartButton(listingUrl) {
+  const listingKey = getRedfinListingKey(listingUrl);
+  const links = Array.from(document.querySelectorAll('a[href*="/home/"]'));
+  const link = links.find(candidate => getRedfinListingKey(candidate.href) === listingKey);
+  if (!link) return null;
+
+  let container = link.parentElement;
+  while (container && container !== document.body) {
+    const buttons = Array.from(container.querySelectorAll('button, [role="button"]'));
+    const heartButton = buttons.find(candidate => findHeartButton(candidate) === candidate);
+    if (heartButton) return heartButton;
+    container = container.parentElement;
+  }
+  return null;
+}
+
+const observedSavedListings = new Set();
 
 // Helper to parse card metadata on Redfin search result lists
 function parseListingCard(cardElement) {
@@ -414,6 +603,8 @@ function isMapPresentOnPage() {
 
 let lastMapStatus = null;
 function checkAndSendMapStatus() {
+  if (!isTopFrame()) return;
+
   try {
     const currentStatus = isMapPresentOnPage();
     if (currentStatus !== lastMapStatus) {

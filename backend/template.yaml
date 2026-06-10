@@ -12,6 +12,10 @@ Parameters:
     NoEcho: true
     MinLength: 24
     Description: Bearer token shared by the extension and property API.
+  LightRailStationsKey:
+    Type: String
+    Default: reference/light_rail_stations.geojson
+    Description: S3 key containing the canonical Sound Transit station GeoJSON.
 
 Globals:
   Function:
@@ -52,6 +56,8 @@ Resources:
         Variables:
           PROPERTY_BUCKET:
             Ref: PropertyBucketName
+          LIGHT_RAIL_STATIONS_KEY:
+            Ref: LightRailStationsKey
           SYNC_TOKEN:
             Ref: SyncToken
       Policies:
@@ -66,6 +72,7 @@ Resources:
                 StringLike:
                   s3:prefix:
                     - properties/*
+                    - reference/*
             - Sid: ReadWritePropertyObjects
               Effect: Allow
               Action:
@@ -73,6 +80,12 @@ Resources:
                 - s3:PutObject
               Resource:
                 Fn::Sub: "arn:${AWS::Partition}:s3:::${PropertyBucketName}/properties/*"
+            - Sid: ReadReferenceObjects
+              Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource:
+                Fn::Sub: "arn:${AWS::Partition}:s3:::${PropertyBucketName}/reference/*"
 
 Outputs:
   FunctionUrl:
@@ -85,3 +98,7 @@ Outputs:
     Description: Existing private S3 bucket containing the canonical property portfolio.
     Value:
       Ref: PropertyBucketName
+  LightRailStationsKey:
+    Description: Canonical Sound Transit station GeoJSON key.
+    Value:
+      Ref: LightRailStationsKey

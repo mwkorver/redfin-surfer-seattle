@@ -6,4 +6,4 @@ resolve_s3 = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 region = "us-west-2"
-parameter_overrides = "PropertyBucketName=redfin-surfer-<your-account-id>-us-west-2-an"
+parameter_overrides = "PropertyBucketName=redfin-surfer-<your-account-id>-us-west-2-an LightRailStationsKey=reference/light_rail_stations.geojson"
