@@ -7,8 +7,11 @@ function simulateLocalDiligence(listing) {
   const permitPromise = isSeattle ? fetchSeattlePermits(listing) : Promise.resolve([]);
   const crimePromise = isSeattle ? fetchSeattleCrime(listing) : Promise.resolve([]);
   const lightRailPromise = findNearestLightRailStations(listing, 2);
+  const riparianPromise = listing.parcel?.parcelId && listing.parcel?.boundary
+    ? fetchRiparianStreams(listing.parcel.boundary)
+    : Promise.resolve(null);
 
-  return Promise.all([permitPromise, crimePromise, lightRailPromise]).then(([permits, crimes, lightRail]) => {
+  return Promise.all([permitPromise, crimePromise, lightRailPromise, riparianPromise]).then(([permits, crimes, lightRail, riparianStreams]) => {
     const nearestStations = lightRail.stations;
     const nearestStation = nearestStations[0] || null;
     const crimeScore = scoreCrime(crimes);
@@ -40,6 +43,13 @@ function simulateLocalDiligence(listing) {
         "pricePerSqft",
         pricePerSqftScore,
         `$${Math.round(ppsf).toLocaleString()}/sq ft`
+      ));
+    }
+    if (riparianStreams !== null) {
+      topics.push(createScoredTopic(
+        "riparian",
+        scoreRiparian(riparianStreams),
+        formatRiparianStatus(riparianStreams)
       ));
     }
 
@@ -438,6 +448,74 @@ function formatNearestStationSummary(stations) {
   return stations
     .map(station => `${station.name} (${formatDistanceMiles(station.distanceMiles)})`)
     .join(" and ");
+}
+
+function fetchRiparianStreams(boundaryGeoJson) {
+  const arcgisPolygon = geojsonPolygonToArcGIS(boundaryGeoJson);
+  if (!arcgisPolygon) return Promise.resolve(null);
+
+  return bufferGeometry(arcgisPolygon, 165)
+    .then(buffered => buffered ? queryFStreams(buffered) : [])
+    .catch(error => {
+      console.warn("[Diligence Sidecar] Riparian stream query failed:", error);
+      return null;
+    });
+}
+
+function geojsonPolygonToArcGIS(geojson) {
+  if (!geojson || geojson.type !== "Polygon" || !Array.isArray(geojson.coordinates)) return null;
+  return { rings: geojson.coordinates, spatialReference: { wkid: 4326 } };
+}
+
+function bufferGeometry(arcgisPolygon, distanceFeet) {
+  const body = new URLSearchParams({
+    geometries: JSON.stringify({ geometryType: "esriGeometryPolygon", geometries: [arcgisPolygon] }),
+    inSR: "4326",
+    outSR: "4326",
+    distances: String(distanceFeet),
+    unit: "9002",
+    geodesic: "true",
+    f: "json"
+  });
+  return fetch("https://utility.arcgisonline.com/arcgis/rest/services/Geometry/GeometryServer/buffer", {
+    method: "POST",
+    body
+  })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(`Buffer HTTP ${r.status}`)))
+    .then(data => data?.geometries?.[0] ? { ...data.geometries[0], spatialReference: { wkid: 4326 } } : null);
+}
+
+function queryFStreams(bufferedPolygon) {
+  const body = new URLSearchParams({
+    geometry: JSON.stringify(bufferedPolygon),
+    geometryType: "esriGeometryPolygon",
+    spatialRel: "esriSpatialRelIntersects",
+    where: "StreamType='F'",
+    outFields: "StreamType,FishHabitatCriteria,WatercourseNameS",
+    inSR: "4326",
+    returnGeometry: "false",
+    f: "json"
+  });
+  return fetch("https://gismaps.kingcounty.gov/arcgis/rest/services/Environment/KingCo_SensitiveAreas/MapServer/21/query", {
+    method: "POST",
+    body
+  })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(`F streams HTTP ${r.status}`)))
+    .then(data => Array.isArray(data?.features) ? data.features : []);
+}
+
+function scoreRiparian(streams) {
+  return streams.length === 0 ? 90 : 30;
+}
+
+function formatRiparianStatus(streams) {
+  if (!streams.length) return "No F-type streams within 165 ft";
+  const names = [...new Set(
+    streams.map(f => f.attributes?.WatercourseNameS).filter(Boolean)
+  )];
+  return names.length
+    ? names.slice(0, 2).join(" · ")
+    : `${streams.length} F-type stream${streams.length > 1 ? "s" : ""} nearby`;
 }
 
 function scoreLotArea(sqftValue) {

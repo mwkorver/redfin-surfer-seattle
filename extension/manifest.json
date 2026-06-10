@@ -13,6 +13,7 @@
     "*://*.redfin.com/*",
     "https://data.seattle.gov/*",
     "https://gismaps.kingcounty.gov/*",
+    "https://utility.arcgisonline.com/*",
     "https://*.on.aws/*"
   ],
   "background": {

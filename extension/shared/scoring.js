@@ -15,6 +15,10 @@ const DiligenceScoring = Object.freeze({
     pricePerSqft: Object.freeze({
       label: "Price/Sq.Ft.",
       weight: 0.20
+    }),
+    riparian: Object.freeze({
+      label: "Riparian",
+      weight: 0.20
     })
   }),
 

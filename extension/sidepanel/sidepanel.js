@@ -4,7 +4,7 @@ let apiToken = "";
 let portfolioEtag = "";
 let apiConnectionValid = false;
 let backendSyncEnabled = true;
-let scoringWeights = { crime: 40, lightRail: 20, lotArea: 20, pricePerSqft: 20 };
+let scoringWeights = { crime: 40, lightRail: 20, lotArea: 20, pricePerSqft: 20, riparian: 20 };
 let connectionValidationTimer = null;
 let connectionValidationId = 0;
 let lightRailStationsPromise = null;
@@ -33,6 +33,8 @@ const weightLotAreaInput = document.getElementById("weight-lotarea");
 const weightLotAreaDisplay = document.getElementById("weight-lotarea-display");
 const weightPriceSqftInput = document.getElementById("weight-pricesqft");
 const weightPriceSqftDisplay = document.getElementById("weight-pricesqft-display");
+const weightRiparianInput = document.getElementById("weight-riparian");
+const weightRiparianDisplay = document.getElementById("weight-riparian-display");
 
 document.addEventListener("DOMContentLoaded", () => {
   loadState();
@@ -71,7 +73,7 @@ function loadState() {
     }
 
     const saved = res.scoring_weights || {};
-    scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20 };
+    scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20, riparian: saved.riparian ?? 20 };
     applyWeightInputs();
 
     chrome.storage.local.remove("auto_diligence_on_heart");
@@ -146,6 +148,13 @@ function setupEventListeners() {
   weightPriceSqftInput.addEventListener("input", () => {
     scoringWeights.pricePerSqft = Number(weightPriceSqftInput.value);
     weightPriceSqftDisplay.textContent = `${scoringWeights.pricePerSqft}%`;
+    chrome.storage.local.set({ scoring_weights: scoringWeights });
+    renderPortfolio();
+  });
+
+  weightRiparianInput.addEventListener("input", () => {
+    scoringWeights.riparian = Number(weightRiparianInput.value);
+    weightRiparianDisplay.textContent = `${scoringWeights.riparian}%`;
     chrome.storage.local.set({ scoring_weights: scoringWeights });
     renderPortfolio();
   });
@@ -226,7 +235,7 @@ function setupEventListeners() {
 
     if (changes.scoring_weights) {
       const saved = changes.scoring_weights.newValue || {};
-      scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20 };
+      scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20, riparian: saved.riparian ?? 20 };
       applyWeightInputs();
       renderPortfolio();
     }
@@ -248,6 +257,8 @@ function applyWeightInputs() {
   weightLotAreaDisplay.textContent = `${scoringWeights.lotArea}%`;
   weightPriceSqftInput.value = String(scoringWeights.pricePerSqft);
   weightPriceSqftDisplay.textContent = `${scoringWeights.pricePerSqft}%`;
+  weightRiparianInput.value = String(scoringWeights.riparian);
+  weightRiparianDisplay.textContent = `${scoringWeights.riparian}%`;
 }
 
 function schedulePortfolioEnrichment() {
