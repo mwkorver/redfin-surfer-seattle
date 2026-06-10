@@ -463,8 +463,15 @@ function fetchRiparianStreams(boundaryGeoJson) {
 }
 
 function geojsonPolygonToArcGIS(geojson) {
-  if (!geojson || geojson.type !== "Polygon" || !Array.isArray(geojson.coordinates)) return null;
-  return { rings: geojson.coordinates, spatialReference: { wkid: 4326 } };
+  if (!geojson) return null;
+  if (geojson.type === "Polygon" && Array.isArray(geojson.coordinates)) {
+    return { rings: geojson.coordinates, spatialReference: { wkid: 4326 } };
+  }
+  if (geojson.type === "MultiPolygon" && Array.isArray(geojson.coordinates)) {
+    // Flatten all rings from all polygons into one ArcGIS polygon
+    return { rings: geojson.coordinates.flat(1), spatialReference: { wkid: 4326 } };
+  }
+  return null;
 }
 
 function bufferGeometry(arcgisPolygon, distanceFeet) {
