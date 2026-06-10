@@ -5,9 +5,9 @@
 
 This project grew out of my search for a home in Seattle.
 
-It's also the kind of project that I probably wouldn't have built a few years ago. The value is real, but the effort required to build and maintain it would have outweighed the benefit for a tool used primarily by one person.
+A few years ago I probably wouldn't have bothered building something this specialized. The audience is essentially one person. Modern AI coding tools change that equation by making it much cheaper to experiment and build niche software.
 
-Modern AI-assisted development tools change that equation. They make it practical to build small, highly specialized applications like this one that solve narrow personal problems.
+Redfin Surfer Seattle is the result.
 
 
 <img width="375" height="237" alt="image" src="https://github.com/user-attachments/assets/a7265870-4096-4cae-9273-59efc02e8bbc" />
