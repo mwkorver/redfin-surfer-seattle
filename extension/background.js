@@ -3,7 +3,7 @@
  * Handles side panel state, SPA navigation detection, and shared storage coordination.
  */
 
-const DEPLOYED_API_ENDPOINT = "https://YOUR-LAMBDA-URL.lambda-url.us-west-2.on.aws/";
+const DEPLOYED_API_ENDPOINT = "";
 
 // Configure side panel behavior on installation
 chrome.runtime.onInstalled.addListener(() => {

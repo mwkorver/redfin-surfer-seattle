@@ -4,3 +4,5 @@ node_modules/
 __pycache__/
 *.pyc
 backend/property_api/spatial.duckdb_extension
+property-memory-discussion-2.md
+test_extension.js

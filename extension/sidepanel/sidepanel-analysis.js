@@ -194,6 +194,9 @@ function resolveKingCountyParcel(listing) {
 }
 
 function enrichKingCountyParcel(parcel) {
+  if (!/^\d{10}$/.test(parcel.parcelId)) {
+    return Promise.resolve({ ...parcel, lookupAttemptedAt: new Date().toISOString() });
+  }
   return Promise.all([
     fetchKingCountyParcelSummary(parcel.parcelId),
     fetchKingCountyParcelBoundary(parcel.parcelId)

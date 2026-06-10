@@ -88,8 +88,7 @@ def lambda_handler(event, _context):
 
 def is_authorized(event):
     if not SYNC_TOKEN:
-        # Bypass auth for local/developer personal deployments
-        return True
+        return False
     headers = normalize_headers(event.get("headers") or {})
     authorization = headers.get("authorization", "")
     prefix = "Bearer "
