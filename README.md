@@ -10,6 +10,10 @@ It's also the kind of project that I probably wouldn't have built a few years ag
 Modern AI-assisted development tools change that equation. They make it practical to build small, highly specialized applications like this one that solve narrow personal problems.
 
 
+<img width="375" height="237" alt="image" src="https://github.com/user-attachments/assets/a7265870-4096-4cae-9273-59efc02e8bbc" />
+
+
+
 ## Status
 
 This is a personal research prototype, not a maintained open-source project. This repository is published for reference and transparency.
