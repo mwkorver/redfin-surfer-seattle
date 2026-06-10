@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Redfin Surfer property portfolio persistence API
+
+Parameters:
+  PropertyBucketName:
+    Type: String
+    Default: redfin-surfer-<your-account-id>-us-west-2-an
+    Description: Existing private S3 bucket containing the canonical property portfolio.
+  SyncToken:
+    Type: String
+    NoEcho: true
+    MinLength: 24
+    Description: Bearer token shared by the extension and property API.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures:
+      - arm64
+    Timeout: 30
+    MemorySize: 1024
+    Tracing: Active
+
+Resources:
+  PropertyApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      CodeUri: property_api/
+      Handler: app.lambda_handler
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+          AllowHeaders:
+            - authorization
+            - content-type
+            - if-match
+            - if-none-match
+          AllowMethods:
+            - GET
+            - PUT
+            - POST
+            - DELETE
+          ExposeHeaders:
+            - etag
+          MaxAge: 600
+      Environment:
+        Variables:
+          PROPERTY_BUCKET:
+            Ref: PropertyBucketName
+          SYNC_TOKEN:
+            Ref: SyncToken
+      Policies:
+        - Statement:
+            - Sid: ListPropertyObjects
+              Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource:
+                Fn::Sub: "arn:${AWS::Partition}:s3:::${PropertyBucketName}"
+              Condition:
+                StringLike:
+                  s3:prefix:
+                    - properties/*
+            - Sid: ReadWritePropertyObjects
+              Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource:
+                Fn::Sub: "arn:${AWS::Partition}:s3:::${PropertyBucketName}/properties/*"
+
+Outputs:
+  FunctionUrl:
+    Description: Property synchronization Lambda Function URL.
+    Value:
+      Fn::GetAtt:
+        - PropertyApiFunctionUrl
+        - FunctionUrl
+  BucketName:
+    Description: Existing private S3 bucket containing the canonical property portfolio.
+    Value:
+      Ref: PropertyBucketName

@@ -94,9 +94,9 @@ function runAndSend(delay = 800) {
         return;
       }
 
-      const isHearted = PropertyParser.isPageHearted();
-      if (!isHearted) {
-        console.log("[Diligence Sidecar] Listing is not saved. Skipping metadata extraction.");
+      const heartState = PropertyParser.getPageHeartState();
+      if (heartState !== "saved") {
+        console.log(`[Diligence Sidecar] Listing save state is ${heartState}. Skipping extraction.`);
         chrome.runtime.sendMessage({
           action: "CLEAR_CURRENT_LISTING"
         }).catch(() => {});
@@ -138,8 +138,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, data: null });
         return;
       }
-      const isHearted = PropertyParser.isPageHearted();
-      if (!isHearted) {
+      const heartState = PropertyParser.getPageHeartState();
+      if (heartState !== "saved") {
         sendResponse({ success: true, data: null });
       } else {
         const data = PropertyParser.extractMetadata();
@@ -185,9 +185,10 @@ document.addEventListener('click', (e) => {
         });
 
         setTimeout(() => {
-          if (PropertyParser.isPageHearted()) {
+          const heartState = PropertyParser.getPageHeartState();
+          if (heartState === "saved") {
             runAndSend(0);
-          } else {
+          } else if (heartState === "unsaved") {
             chrome.runtime.sendMessage({
               action: "REMOVE_HEARTED_LISTING",
               url: window.location.href
@@ -370,39 +371,6 @@ const heartObserver = new MutationObserver((mutations) => {
       if (button) {
         if (isPropertyDetailPage()) {
           stateChanged = true;
-        } else {
-          // On search/filter pages, we check if the button transitioned to an un-favorited state.
-          // Unfavoriting does not require user gesture token, so we can clear safely from observer.
-          const label = (button.getAttribute('aria-label') || '').toLowerCase();
-          const text = button.innerText.toLowerCase();
-          const classes = (button.className && typeof button.className === 'string') ? button.className.toLowerCase() : '';
-          const ariaPressed = button.getAttribute('aria-pressed');
-          const ariaChecked = button.getAttribute('aria-checked');
-          
-          const isSaved = 
-            label.includes('remove') || 
-            label.includes('unfavorite') || 
-            text.includes('favorited') ||
-            classes.includes('is-favorite') ||
-            ariaPressed === 'true' ||
-            ariaChecked === 'true';
-
-          if (!isSaved) {
-            // Find card container URL using robust traversal and verify if it matches our active listing
-            const containerInfo = findCardContainer(button);
-            if (containerInfo && containerInfo.link && containerInfo.link.href) {
-              const unheartedUrl = containerInfo.link.href;
-              chrome.storage.local.get(["current_listing"], (res) => {
-                if (res.current_listing && res.current_listing.url === unheartedUrl) {
-                  console.log("[Diligence Sidecar] Observer detected active listing was unhearted.");
-                  chrome.runtime.sendMessage({
-                    action: "REMOVE_HEARTED_LISTING",
-                    url: unheartedUrl
-                  }).catch(() => {});
-                }
-              });
-            }
-          }
         }
       }
     }
@@ -423,3 +391,40 @@ heartObserver.observe(document.body, {
   subtree: true,
   attributeFilter: ['aria-label', 'class', 'aria-pressed', 'aria-checked']
 });
+
+function getRedfinListingKey(urlValue) {
+  try {
+    const url = new URL(urlValue);
+    const path = url.pathname.replace(/^\/+|\/+$/g, "");
+    return path ? `redfin/${path}` : "";
+  } catch (error) {
+    return "";
+  }
+}
+
+// Map presence detection logic
+function isMapPresentOnPage() {
+  const selector = '.GoogleMap, .map-canvas, #map-canvas, .InlineMap, #lightboxMap, [data-rf-test-id="map"], .mapContainer, .inline-map, .gm-style';
+  const el = document.querySelector(selector);
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+
+let lastMapStatus = null;
+function checkAndSendMapStatus() {
+  try {
+    const currentStatus = isMapPresentOnPage();
+    if (currentStatus !== lastMapStatus) {
+      lastMapStatus = currentStatus;
+      chrome.storage.local.set({ mapPresent: currentStatus }).catch(() => {});
+    }
+  } catch (e) {
+    // Fail-safe
+  }
+}
+
+// Run map presence check every 1000ms
+setInterval(checkAndSendMapStatus, 1000);
+checkAndSendMapStatus();

@@ -1,0 +1,9 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "redfin-surfer"
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+region = "us-west-2"
+parameter_overrides = "PropertyBucketName=redfin-surfer-<your-account-id>-us-west-2-an"

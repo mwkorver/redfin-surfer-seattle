@@ -13,6 +13,13 @@
         <div class="brand">
           <span class="logo-dot"></span>
           <h1>Saved Properties</h1>
+          <div id="map-status" class="map-status-icon" title="Map not detected on page">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
+              <line x1="9" y1="3" x2="9" y2="18"></line>
+              <line x1="15" y1="6" x2="15" y2="21"></line>
+            </svg>
+          </div>
         </div>
         <p class="header-copy">Ranked by weighted diligence score</p>
       </div>
@@ -46,6 +53,10 @@
             <label for="input-api-url">API Gateway URL</label>
             <input type="url" id="input-api-url" placeholder="https://api.example.com/diligence">
           </div>
+          <div class="input-group">
+            <label for="input-api-token">API Token (Sync Token)</label>
+            <input type="password" id="input-api-token" placeholder="Enter bearer token">
+          </div>
           <label class="checkbox-container">
             <input type="checkbox" id="chk-auto-diligence">
             <span class="checkmark"></span>
@@ -59,6 +70,7 @@
     </footer>
   </div>
 
+  <script src="../shared/scoring.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

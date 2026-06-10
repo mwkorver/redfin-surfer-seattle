@@ -90,13 +90,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.local.get(["hearted_listings", "auto_diligence_on_heart"], (res) => {
       const listings = res.hearted_listings || {};
       const listingKey = getListingKey(listingData);
-      const existing = listings[listingKey] || {};
+      let existing = listings[listingKey] || {};
+      Object.entries(listings).forEach(([storedKey, storedListing]) => {
+        if (storedKey !== listingKey && getListingKey(storedListing) === listingKey) {
+          existing = { ...storedListing, ...existing };
+          delete listings[storedKey];
+        }
+      });
       const savedAt = existing.savedAt || new Date().toISOString();
+      const normalizedListing = normalizeStoredListing(listingData, listingKey);
 
       listings[listingKey] = {
         ...existing,
-        ...listingData,
-        listingKey,
+        ...normalizedListing,
         savedAt,
         updatedAt: new Date().toISOString()
       };
@@ -154,12 +160,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 function getListingKey(listing) {
   if (!listing) return "";
 
+  if (listing.listingKey?.startsWith("redfin/")) {
+    return listing.listingKey;
+  }
+
   try {
     const url = new URL(listing.url);
-    return `${url.origin}${url.pathname}`.replace(/\/$/, "");
+    const path = url.pathname.replace(/^\/+|\/+$/g, "");
+    return path ? `redfin/${path}` : "";
   } catch (err) {
     return listing.mlsId
       ? `mls:${listing.mlsId}`
       : (listing.address?.streetAddress || listing.url || "");
   }
+}
+
+function normalizeStoredListing(listing, listingKey) {
+  const normalized = {
+    ...listing,
+    listingKey,
+    redfinHomeId: listing.redfinHomeId || getRedfinHomeId(listingKey)
+  };
+  delete normalized.url;
+  return normalized;
+}
+
+function getRedfinHomeId(listingKey) {
+  const match = String(listingKey || "").match(/\/home\/(\d+)(?:\/|$)/);
+  return match ? match[1] : "";
 }

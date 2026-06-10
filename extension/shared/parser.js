@@ -326,7 +326,9 @@ const PropertyParser = {
   /**
    * Checks if the active listing page is currently "Hearted" or "Favorited" by the user.
    */
-  isPageHearted() {
+  getPageHeartState() {
+    let foundFavoriteButton = false;
+
     // Scan all button elements on the page
     const buttons = document.querySelectorAll('button');
     for (const btn of buttons) {
@@ -349,6 +351,7 @@ const PropertyParser = {
         text === 'favorited';
 
       if (isFavSaveBtn) {
+        foundFavoriteButton = true;
         // Determine if it is currently in a HEARTED / SAVED state.
         if (
           label.includes('remove') || 
@@ -361,11 +364,15 @@ const PropertyParser = {
           btn.getAttribute('aria-pressed') === 'true'
         ) {
           console.log("[Diligence Sidecar] Found active saved button:", label || text || className);
-          return true;
+          return "saved";
         }
       }
     }
 
-    return false;
+    return foundFavoriteButton ? "unsaved" : "unknown";
+  },
+
+  isPageHearted() {
+    return this.getPageHeartState() === "saved";
   }
 };

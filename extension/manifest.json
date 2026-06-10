@@ -11,7 +11,9 @@
   ],
   "host_permissions": [
     "*://*.redfin.com/*",
-    "https://data.seattle.gov/*"
+    "https://data.seattle.gov/*",
+    "https://gismaps.kingcounty.gov/*",
+    "https://*.on.aws/*"
   ],
   "background": {
     "service_worker": "background.js"
