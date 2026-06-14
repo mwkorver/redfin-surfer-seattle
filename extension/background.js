@@ -157,21 +157,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log("[Diligence Sidecar] Removed listing from portfolio:", listingKey);
       });
 
-      if (removedListing && res.backend_sync_enabled !== false && res.aws_api_token) {
-        const endpoint = normalizeConfiguredApiEndpoint(res.aws_api_url);
-        if (endpoint !== res.aws_api_url) {
-          chrome.storage.local.set({ aws_api_url: endpoint });
+      const endpoint = res.aws_api_url ? normalizeConfiguredApiEndpoint(res.aws_api_url) : "";
+      const isBackendConfigured = Boolean(endpoint && res.aws_api_token);
+
+      if (removedListing && isBackendConfigured) {
+        if (res.backend_sync_enabled !== false) {
+          if (endpoint !== res.aws_api_url) {
+            chrome.storage.local.set({ aws_api_url: endpoint });
+          }
+          deleteRemoteProperty(listingKey, endpoint, res.aws_api_token)
+            .then(() => {
+              console.log("[Diligence Sidecar] Removed listing from backend:", listingKey);
+            })
+            .catch(error => {
+              console.error("[Diligence Sidecar] Backend removal failed:", listingKey, error);
+              queuePendingBackendDelete(listingKey);
+            });
+        } else {
+          queuePendingBackendDelete(listingKey);
         }
-        deleteRemoteProperty(listingKey, endpoint, res.aws_api_token)
-          .then(() => {
-            console.log("[Diligence Sidecar] Removed listing from backend:", listingKey);
-          })
-          .catch(error => {
-            console.error("[Diligence Sidecar] Backend removal failed:", listingKey, error);
-            queuePendingBackendDelete(listingKey);
-          });
-      } else if (removedListing) {
-        queuePendingBackendDelete(listingKey);
       }
     });
     sendResponse({ success: true });
@@ -218,11 +222,10 @@ async function flushPendingBackendDeletes() {
     "aws_api_token"
   ]);
   const pending = state.pending_backend_deletes || [];
-  if (state.backend_sync_enabled === false || !state.aws_api_token || !pending.length) {
+  const endpoint = state.aws_api_url ? normalizeConfiguredApiEndpoint(state.aws_api_url) : "";
+  if (state.backend_sync_enabled === false || !endpoint || !state.aws_api_token || !pending.length) {
     return;
   }
-
-  const endpoint = normalizeConfiguredApiEndpoint(state.aws_api_url);
   const failed = [];
   for (const listingKey of pending) {
     try {
@@ -273,8 +276,15 @@ function getRedfinHomeId(listingKey) {
 }
 
 async function deleteRemoteProperty(listingKey, endpoint, token) {
+  if (!endpoint || !token) {
+    throw new Error("API endpoint or token not configured");
+  }
   const propertiesUrl = buildApiUrl(endpoint, "properties");
-  const propertyUrl = new URL(buildApiUrl(endpoint, "property"));
+  const propertyUrlStr = buildApiUrl(endpoint, "property");
+  if (!propertiesUrl || !propertyUrlStr) {
+    throw new Error("Could not build API URL. Invalid endpoint.");
+  }
+  const propertyUrl = new URL(propertyUrlStr);
   propertyUrl.searchParams.set("key", listingKey);
 
   const authHeaders = {
@@ -328,12 +338,18 @@ async function fetchPortfolioEtag(url, headers) {
 }
 
 function buildApiUrl(endpoint, route) {
-  const base = new URL(endpoint);
-  base.pathname = base.pathname.replace(/\/(?:property|properties)\/?$/, "/");
-  if (!base.pathname.endsWith("/")) base.pathname += "/";
-  base.search = "";
-  base.hash = "";
-  return new URL(route, base).toString();
+  if (!endpoint) return "";
+  try {
+    const base = new URL(endpoint);
+    base.pathname = base.pathname.replace(/\/(?:property|properties)\/?$/, "/");
+    if (!base.pathname.endsWith("/")) base.pathname += "/";
+    base.search = "";
+    base.hash = "";
+    return new URL(route, base).toString();
+  } catch (err) {
+    console.error("[Diligence Sidecar] Invalid endpoint URL:", endpoint, err);
+    return "";
+  }
 }
 
 function normalizeConfiguredApiEndpoint(value) {

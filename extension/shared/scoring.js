@@ -16,8 +16,8 @@ const DiligenceScoring = Object.freeze({
       label: "Price/Sq.Ft.",
       weight: 0.20
     }),
-    riparian: Object.freeze({
-      label: "Riparian",
+    mlsCdom: Object.freeze({
+      label: "MLS CDOM",
       weight: 0.20
     })
   }),

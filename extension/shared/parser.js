@@ -67,6 +67,7 @@ const PropertyParser = {
     if (!data.lotSqft) {
       data.lotSqft = this.fallbackLotSqft();
     }
+    data.cumulativeDaysOnMarket = this.extractCdom(data);
 
     // Clean up coordinates
     if (data.geo) {
@@ -427,5 +428,388 @@ const PropertyParser = {
 
   isPageHearted() {
     return this.getPageHeartState() === "saved";
+  },
+
+  getCurrentHomeId() {
+    if (typeof window === 'undefined' || !window.location) return null;
+    const match = window.location.href.match(/\/home\/(\d+)(?:\/|$)/);
+    return match ? match[1] : null;
+  },
+
+  getDialogContainer() {
+    if (typeof document === 'undefined') return null;
+
+    const candidates = [
+      document.querySelector('#bp-dialog-content'),
+      document.querySelector('div[role="dialog"]'),
+      document.querySelector('.bp-DialogContainer'),
+      document.querySelector('.bp-dialog'),
+      document.querySelector('.DialogContent__body')?.closest('div'),
+      document.querySelector('.Dialog__body')?.closest('div')
+    ].filter(Boolean);
+
+    const bodyDivs = document.querySelectorAll('body > div');
+    for (const div of bodyDivs) {
+      if (div.id === 'bp-dialog-content' || div.getAttribute('role') === 'dialog') {
+        if (!candidates.includes(div)) candidates.push(div);
+        continue;
+      }
+      if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+        const style = window.getComputedStyle(div);
+        const isFixedOrAbsolute = style.position === 'fixed' || style.position === 'absolute';
+        const zIndex = parseInt(style.zIndex, 10);
+        const hasHighZIndex = !isNaN(zIndex) && zIndex >= 99;
+        
+        const className = div.className && typeof div.className === 'string' ? div.className.toLowerCase() : '';
+        const hasDialogClass = className.includes('dialog') || className.includes('modal');
+        const hasCloseButton = div.querySelector(".Dialog__close, button[aria-label*='close'], .close");
+        
+        if (isFixedOrAbsolute && (hasHighZIndex || hasDialogClass || hasCloseButton)) {
+          if (!candidates.includes(div)) candidates.push(div);
+        }
+      }
+    }
+
+    for (const cand of candidates) {
+      if (cand) {
+        if (typeof cand.getBoundingClientRect === 'function' && typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+          const rect = cand.getBoundingClientRect();
+          const style = window.getComputedStyle(cand);
+          if (rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+            return cand;
+          }
+        } else {
+          // Fallback for environment constraints where UI metrics are not supported
+          return cand;
+        }
+      }
+    }
+
+    return null;
+  },
+
+  isDialogForCurrentListing(dialog, data) {
+    if (!dialog) return false;
+    if (!data || !data.address || !data.address.streetAddress) {
+      // Return true if no metadata is available (e.g. mock test environment)
+      return true;
+    }
+
+    const streetAddress = data.address.streetAddress.trim().toLowerCase();
+    const dialogText = (dialog.textContent || "").toLowerCase();
+
+    // Direct exact street address matching
+    if (dialogText.includes(streetAddress)) {
+      return true;
+    }
+
+    // Split street address and check street number and primary name fragments
+    const parts = streetAddress.split(/\s+/).filter(Boolean);
+    if (parts.length > 0) {
+      const streetNum = parts[0];
+      if (!dialogText.includes(streetNum)) {
+        return false;
+      }
+      if (parts.length > 1) {
+        const streetNamePart = parts[1];
+        if (!dialogText.includes(streetNamePart)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    return false;
+  },
+
+  extractCumulativeCdomOnly(data) {
+    // 1. Specific selector check
+    const specificSelector = "#bp-dialog-content > div.DialogContent__body > div > div:nth-child(16) > ul:nth-child(1) > li:nth-child(2)";
+    const specificEl = document.querySelector(specificSelector);
+    if (specificEl) {
+      const text = (specificEl.textContent || "").trim();
+      const textLower = text.toLowerCase();
+      const hasSubDayUnit = textLower.includes("hour") || textLower.includes("hr") || textLower.includes("minute") || textLower.includes("min") || textLower.includes("second") || textLower.includes("sec");
+      const num = parseInt(text.replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(num)) {
+        console.log("[Diligence Sidecar] Found CDOM in specific selector:", num);
+        return hasSubDayUnit ? 0 : num;
+      }
+    }
+
+    // 2. Dialog list traversal for "cumulative days on market" or "cdom" (checking every list item)
+    const dialog = this.getDialogContainer();
+    if (dialog && this.isDialogForCurrentListing(dialog, data)) {
+      const dialogLis = dialog.querySelectorAll("li");
+      for (let i = 0; i < dialogLis.length; i++) {
+        const text = (dialogLis[i].textContent || "").trim().toLowerCase();
+        if (text.includes("cumulative days on market") || text.includes("cdom")) {
+          const hasSubDayUnit = text.includes("hour") || text.includes("hr") || text.includes("minute") || text.includes("min") || text.includes("second") || text.includes("sec");
+          // If the number is in the same element
+          const match = text.match(/\b\d+\b/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (!isNaN(num)) {
+              console.log("[Diligence Sidecar] Found CDOM in dialog li text:", num);
+              return hasSubDayUnit ? 0 : num;
+            }
+          }
+          // Otherwise check the next sibling li
+          if (i + 1 < dialogLis.length) {
+            const nextText = (dialogLis[i + 1].textContent || "").trim();
+            const nextTextLower = nextText.toLowerCase();
+            const hasSubDayUnitNext = nextTextLower.includes("hour") || nextTextLower.includes("hr") || nextTextLower.includes("minute") || nextTextLower.includes("min") || nextTextLower.includes("second") || nextTextLower.includes("sec");
+            const num = parseInt(nextText.replace(/[^0-9]/g, ""), 10);
+            if (!isNaN(num)) {
+              console.log("[Diligence Sidecar] Found CDOM in dialog next sibling li:", num);
+              return (hasSubDayUnit || hasSubDayUnitNext) ? 0 : num;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Body regex for "cumulative days on market" or "cdom"
+    const bodyText = document.body.innerText || "";
+    const regexes = [
+      /cumulative\s+days\s+on\s+market\s*:?\s*(\d+)\s*(hour|hr|minute|min|day|wk|month|yr)s?/i,
+      /\bcdom\b\s*:?\s*(\d+)\s*(hour|hr|minute|min|day|wk|month|yr)s?/i,
+      /(\d+)\s*(hour|hr|minute|min|day|wk|month|yr)s?\s+(?:cumulative\s+days\s+on\s+market|cdom)/i,
+      /cumulative\s+days\s+on\s+market\s*:?\s*(\d+)/i,
+      /\bcdom\b\s*:?\s*(\d+)/i
+    ];
+    for (const regex of regexes) {
+      const match = bodyText.match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num)) {
+          const unit = match[2] ? match[2].toLowerCase() : "";
+          if (["hour", "hr", "minute", "min"].includes(unit)) {
+            console.log("[Diligence Sidecar] Found sub-day unit in body regex:", match[0]);
+            return 0;
+          }
+          console.log("[Diligence Sidecar] Extracted cumulative days on market / cdom via body regex:", num);
+          return num;
+        }
+      }
+    }
+
+    // 4. Element scan for "cumulative days on market" or "cdom"
+    const elements = document.querySelectorAll('span, div, td, li, p');
+    for (const el of elements) {
+      const text = (el.textContent || '').trim().toLowerCase();
+      if ((text.includes("cumulative days on market") || text.includes("cdom")) && text.length < 120) {
+        const hasSubDayUnit = text.includes("hour") || text.includes("hr") || text.includes("minute") || text.includes("min") || text.includes("second") || text.includes("sec");
+        const selfMatch = text.match(/\b\d+\b/);
+        if (selfMatch) {
+          const num = parseInt(selfMatch[0], 10);
+          if (!isNaN(num)) {
+            console.log("[Diligence Sidecar] Found CDOM in element self-text:", num);
+            return hasSubDayUnit ? 0 : num;
+          }
+        }
+
+        let valText = "";
+        if (el.nextElementSibling) {
+          valText = el.nextElementSibling.textContent;
+        } 
+        if (!valText || !valText.trim()) {
+          const parent = el.parentElement;
+          if (parent) {
+            const siblings = Array.from(parent.children);
+            const index = siblings.indexOf(el);
+            if (index !== -1 && index + 1 < siblings.length) {
+              valText = siblings[index + 1].textContent;
+            } else {
+              const nextParentSibling = parent.nextElementSibling;
+              if (nextParentSibling) {
+                valText = nextParentSibling.textContent;
+              }
+            }
+          }
+        }
+        if (valText) {
+          const valTextLower = valText.toLowerCase();
+          const hasSubDayUnitVal = valTextLower.includes("hour") || valTextLower.includes("hr") || valTextLower.includes("minute") || valTextLower.includes("min") || valTextLower.includes("second") || valTextLower.includes("sec");
+          const cleanText = valText.replace(/[^0-9]/g, '');
+          if (cleanText) {
+            const num = parseInt(cleanText, 10);
+            if (!isNaN(num)) {
+              console.log("[Diligence Sidecar] Found CDOM in sibling/parent text:", num);
+              return (hasSubDayUnit || hasSubDayUnitVal) ? 0 : num;
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Script tag check fallback for "cumulativeDaysOnMarket"
+    const currentHomeId = this.getCurrentHomeId();
+    const scripts = document.querySelectorAll('script');
+    for (const script of scripts) {
+      const content = script.textContent || "";
+      if (content.includes("cumulativeDaysOnMarket")) {
+        if (currentHomeId && !content.includes(currentHomeId)) {
+          continue; // Skip script tags belonging to other listings in this SPA session
+        }
+        const match = content.match(/"cumulativeDaysOnMarket"\s*:\s*(\d+)/i) || 
+                      content.match(/cumulativeDaysOnMarket\s*:\s*(\d+)/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num)) {
+            console.log("[Diligence Sidecar] Found cumulativeDaysOnMarket in script state fallback:", num);
+            return num;
+          }
+        }
+      }
+    }
+
+    return null;
+  },
+
+  extractFallbackCdomOnly(data) {
+    // 1. Dialog list traversal for "days on market" or "time on redfin" (checking every list item)
+    const dialog = this.getDialogContainer();
+    if (dialog && this.isDialogForCurrentListing(dialog, data)) {
+      const dialogLis = dialog.querySelectorAll("li");
+      for (let i = 0; i < dialogLis.length; i++) {
+        const text = (dialogLis[i].textContent || "").trim().toLowerCase();
+        if (text.includes("days on market") || text.includes("time on redfin")) {
+          const hasSubDayUnit = text.includes("hour") || text.includes("hr") || text.includes("minute") || text.includes("min") || text.includes("second") || text.includes("sec");
+          const match = text.match(/\b\d+\b/);
+          if (match) {
+            const num = parseInt(match[0], 10);
+            if (!isNaN(num)) {
+              console.log("[Diligence Sidecar] Found fallback in dialog li text:", num);
+              return hasSubDayUnit ? 0 : num;
+            }
+          }
+          if (i + 1 < dialogLis.length) {
+            const nextText = (dialogLis[i + 1].textContent || "").trim();
+            const nextTextLower = nextText.toLowerCase();
+            const hasSubDayUnitNext = nextTextLower.includes("hour") || nextTextLower.includes("hr") || nextTextLower.includes("minute") || nextTextLower.includes("min") || nextTextLower.includes("second") || nextTextLower.includes("sec");
+            const num = parseInt(nextText.replace(/[^0-9]/g, ""), 10);
+            if (!isNaN(num)) {
+              console.log("[Diligence Sidecar] Found fallback in dialog next sibling li:", num);
+              return (hasSubDayUnit || hasSubDayUnitNext) ? 0 : num;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Body regex for "days on market" or "time on redfin"
+    const bodyText = document.body.innerText || "";
+    const regexes = [
+      /days\s+on\s+market\s*:?\s*(\d+)\s*(hour|hr|minute|min|day|wk|month|yr)s?/i,
+      /time\s+on\s+redfin\s*:?\s*(\d+)\s*(hour|hr|minute|min|day|wk|month|yr)s?/i,
+      /(\d+)\s*(hour|hr|minute|min|day|wk|month|yr)s?\s+(?:on\s+redfin|days\s+on\s+market)/i,
+      /days\s+on\s+market\s*:?\s*(\d+)/i,
+      /time\s+on\s+redfin\s*:?\s*(\d+)/i
+    ];
+    for (const regex of regexes) {
+      const match = bodyText.match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num)) {
+          const unit = match[2] ? match[2].toLowerCase() : "";
+          if (["hour", "hr", "minute", "min"].includes(unit)) {
+            console.log("[Diligence Sidecar] Found sub-day unit in body regex:", match[0]);
+            return 0;
+          }
+          console.log("[Diligence Sidecar] Extracted fallback days on market/time on redfin via body regex:", num);
+          return num;
+        }
+      }
+    }
+
+    // 3. Element scan for "days on market" or "time on redfin"
+    const elements = document.querySelectorAll('span, div, td, li, p');
+    for (const el of elements) {
+      const text = (el.textContent || '').trim().toLowerCase();
+      if ((text.includes("days on market") || text.includes("time on redfin")) && text.length < 120) {
+        const hasSubDayUnit = text.includes("hour") || text.includes("hr") || text.includes("minute") || text.includes("min") || text.includes("second") || text.includes("sec");
+        const selfMatch = text.match(/\b\d+\b/);
+        if (selfMatch) {
+          const num = parseInt(selfMatch[0], 10);
+          if (!isNaN(num)) {
+            console.log("[Diligence Sidecar] Found fallback in element self-text:", num);
+            return hasSubDayUnit ? 0 : num;
+          }
+        }
+
+        let valText = "";
+        if (el.nextElementSibling) {
+          valText = el.nextElementSibling.textContent;
+        } 
+        if (!valText || !valText.trim()) {
+          const parent = el.parentElement;
+          if (parent) {
+            const siblings = Array.from(parent.children);
+            const index = siblings.indexOf(el);
+            if (index !== -1 && index + 1 < siblings.length) {
+              valText = siblings[index + 1].textContent;
+            } else {
+              const nextParentSibling = parent.nextElementSibling;
+              if (nextParentSibling) {
+                valText = nextParentSibling.textContent;
+              }
+            }
+          }
+        }
+        if (valText) {
+          const valTextLower = valText.toLowerCase();
+          const hasSubDayUnitVal = valTextLower.includes("hour") || valTextLower.includes("hr") || valTextLower.includes("minute") || valTextLower.includes("min") || valTextLower.includes("second") || valTextLower.includes("sec");
+          const cleanText = valText.replace(/[^0-9]/g, '');
+          if (cleanText) {
+            const num = parseInt(cleanText, 10);
+            if (!isNaN(num)) {
+              console.log("[Diligence Sidecar] Found fallback in sibling/parent text:", num);
+              return (hasSubDayUnit || hasSubDayUnitVal) ? 0 : num;
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Script tag check fallback for "daysOnMarket"
+    const currentHomeId = this.getCurrentHomeId();
+    const scripts = document.querySelectorAll('script');
+    for (const script of scripts) {
+      const content = script.textContent || "";
+      if (content.includes("daysOnMarket")) {
+        if (currentHomeId && !content.includes(currentHomeId)) {
+          continue; // Skip script tags belonging to other listings in this SPA session
+        }
+        const match = content.match(/"daysOnMarket"\s*:\s*(\d+)/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num)) {
+            console.log("[Diligence Sidecar] Found daysOnMarket fallback in script state fallback:", num);
+            return num;
+          }
+        }
+      }
+    }
+
+    return null;
+  },
+
+  extractCdom(data) {
+    // Priority 1: Search specifically for actual "Cumulative Days on Market"
+    const actualCdom = this.extractCumulativeCdomOnly(data);
+    if (actualCdom !== null) {
+      return actualCdom;
+    }
+
+    // Priority 2: Fallback to "Days on Market" / "Time on Redfin"
+    const fallbackCdom = this.extractFallbackCdomOnly(data);
+    if (fallbackCdom !== null) {
+      return fallbackCdom;
+    }
+
+    console.log("[Diligence Sidecar] CDOM not found on page.");
+    return null;
   }
 };
+

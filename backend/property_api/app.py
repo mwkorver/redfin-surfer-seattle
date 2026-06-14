@@ -297,13 +297,28 @@ def initialize_db():
             serverUpdatedAt VARCHAR,
             updatedBy VARCHAR,
             deletedAt VARCHAR,
+            cumulativeDaysOnMarket INTEGER,
             geometry GEOMETRY
         )
     """)
 
     if os.path.exists(LOCAL_PARQUET) and os.path.getsize(LOCAL_PARQUET) > 0:
         try:
-            conn.execute(f"INSERT INTO portfolio SELECT * FROM '{LOCAL_PARQUET}'")
+            # Check if cumulativeDaysOnMarket exists in the parquet file schema
+            cols = [row[0] for row in conn.execute(f"DESCRIBE SELECT * FROM '{LOCAL_PARQUET}'").fetchall()]
+            if "cumulativeDaysOnMarket" in cols:
+                conn.execute(f"INSERT INTO portfolio SELECT * FROM '{LOCAL_PARQUET}'")
+            else:
+                conn.execute(f"""
+                    INSERT INTO portfolio (
+                        listingKey, redfinHomeId, price, address, geo, parcel, report, 
+                        savedAt, serverUpdatedAt, updatedBy, deletedAt, cumulativeDaysOnMarket, geometry
+                    )
+                    SELECT 
+                        listingKey, redfinHomeId, price, address, geo, parcel, report, 
+                        savedAt, serverUpdatedAt, updatedBy, deletedAt, NULL, geometry
+                    FROM '{LOCAL_PARQUET}'
+                """)
         except Exception as e:
             print(f"[ERROR] Failed to load records from {LOCAL_PARQUET}: {e}")
 
@@ -319,7 +334,7 @@ def row_to_geojson(row):
             pass
 
     properties = {}
-    for col in ["listingKey", "redfinHomeId", "price", "savedAt", "serverUpdatedAt", "updatedBy", "deletedAt"]:
+    for col in ["listingKey", "redfinHomeId", "price", "savedAt", "serverUpdatedAt", "updatedBy", "deletedAt", "cumulativeDaysOnMarket"]:
         properties[col] = row.get(col)
 
     for col in ["address", "geo", "parcel", "report"]:
@@ -435,10 +450,17 @@ def put_property(event):
     parcel_str = json.dumps(properties.get("parcel")) if properties.get("parcel") else None
     report_str = json.dumps(properties.get("report")) if properties.get("report") else None
 
+    cumulative_days = properties.get("cumulativeDaysOnMarket")
+    if cumulative_days is not None:
+        try:
+            cumulative_days = int(cumulative_days)
+        except (ValueError, TypeError):
+            cumulative_days = None
+
     if longitude is not None and latitude is not None:
         conn.execute("""
             INSERT OR REPLACE INTO portfolio VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ST_Point(?, ?)
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ST_Point(?, ?)
             )
         """, (
             listing_key,
@@ -452,13 +474,14 @@ def put_property(event):
             server_updated_at,
             updated_by,
             deleted_at,
+            cumulative_days,
             float(longitude),
             float(latitude)
         ))
     else:
         conn.execute("""
             INSERT OR REPLACE INTO portfolio VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
             )
         """, (
             listing_key,
@@ -471,7 +494,8 @@ def put_property(event):
             saved_at,
             server_updated_at,
             updated_by,
-            deleted_at
+            deleted_at,
+            cumulative_days
         ))
 
     try:

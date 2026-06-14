@@ -303,6 +303,20 @@ class PropertyApiTests(unittest.TestCase):
         self.assertEqual(collection["storage"]["storage"], "bundled")
         self.assertGreaterEqual(len(collection["features"]), 40)
 
+    def test_cumulative_days_on_market(self):
+        rec = record()
+        rec["cumulativeDaysOnMarket"] = 45
+        
+        # Save via PUT
+        created = app.lambda_handler(event("PUT", body=rec), None)
+        self.assertEqual(created["statusCode"], 201)
+        
+        # Retrieve via GET
+        fetched = app.lambda_handler(event("GET"), None)
+        self.assertEqual(fetched["statusCode"], 200)
+        fetched_feature = json.loads(fetched["body"])
+        self.assertEqual(fetched_feature["properties"]["cumulativeDaysOnMarket"], 45)
+
 
 if __name__ == "__main__":
     unittest.main()

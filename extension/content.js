@@ -1,3 +1,22 @@
+let cdomExtractedOnActivePage = false;
+let isAutoScrapingCdom = false;
+
+// Inject css to hide details modal during auto-scraping
+const autoScrapingStyle = document.createElement("style");
+autoScrapingStyle.textContent = `
+  body.diligence-auto-scraping [class*="dialog"],
+  body.diligence-auto-scraping [class*="Dialog"],
+  body.diligence-auto-scraping [id*="dialog"],
+  body.diligence-auto-scraping [id*="Dialog"],
+  body.diligence-auto-scraping [class*="mask"],
+  body.diligence-auto-scraping [class*="Overlay"] {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: none !important;
+  }
+`;
+document.documentElement.appendChild(autoScrapingStyle);
+
 // Helper to determine if the active page is a property detail view
 function isPropertyDetailPage() {
   const path = window.location.pathname;
@@ -215,6 +234,10 @@ function runAndSend(delay = 800) {
       }).catch(err => {
         console.log("[Diligence Sidecar] Message sending deferred:", err.message);
       });
+
+      if (data.cumulativeDaysOnMarket === null) {
+        autoScrapeCdomViaDialog();
+      }
     } catch (e) {
       console.error("[Diligence Sidecar] Extraction error:", e);
     }
@@ -254,6 +277,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   } else if (request.action === "PAGE_NAVIGATED") {
     if (!isTopFrame()) return false;
+    cdomExtractedOnActivePage = false;
     // SPA navigation happened, wait slightly for the DOM to render new info
     runAndSend(1200);
     sendResponse({ success: true });
@@ -568,6 +592,21 @@ const heartObserver = new MutationObserver((mutations) => {
       // Settle briefly for state to fully apply, then check status
       runAndSend(250);
     }
+
+    if (!cdomExtractedOnActivePage && isPropertyDetailPage() && PropertyParser.isPageHearted()) {
+      const dialog = PropertyParser.getDialogContainer();
+      const dialogText = dialog ? (dialog.innerText || "").toLowerCase() : "";
+      const hasDialogCdom = dialogText.includes("cumulative days on market") || dialogText.includes("days on market") || dialogText.includes("time on redfin");
+      
+      const bodyText = (document.body.innerText || "").toLowerCase();
+      const hasBodyCdom = bodyText.includes("cumulative days on market") || bodyText.includes("days on market") || bodyText.includes("time on redfin");
+
+      if (hasDialogCdom || (hasBodyCdom && !dialog)) {
+        console.log("[Diligence Sidecar] Observer detected CDOM text loaded in DOM.");
+        cdomExtractedOnActivePage = true;
+        runAndSend(200);
+      }
+    }
   } catch (err) {
     console.error("[Diligence Sidecar] Error in MutationObserver:", err);
   }
@@ -619,3 +658,104 @@ function checkAndSendMapStatus() {
 // Run map presence check every 1000ms
 setInterval(checkAndSendMapStatus, 1000);
 checkAndSendMapStatus();
+
+// Automatic CDOM details scraping functions
+function findDetailsButton() {
+  const elements = Array.from(document.querySelectorAll('a, button, span, div'));
+  for (const el of elements) {
+    const text = (el.textContent || "").trim().toLowerCase();
+    if (text === "see all details" || 
+        text === "see all details on mls" || 
+        text.includes("see all details")) {
+      return el;
+    }
+  }
+  return null;
+}
+
+function closeDetailsDialog() {
+  // Try sending Escape key event
+  const escEvent = new KeyboardEvent('keydown', {
+    key: 'Escape',
+    code: 'Escape',
+    keyCode: 27,
+    which: 27,
+    bubbles: true,
+    cancelable: true
+  });
+  document.dispatchEvent(escEvent);
+
+  // Also click any close buttons inside the dialog wrapper
+  const dialog = PropertyParser.getDialogContainer();
+  if (dialog) {
+    const closeBtn = dialog.querySelector(".Dialog__close, button[aria-label*='close'], .close");
+    if (closeBtn) {
+      closeBtn.click();
+    }
+  }
+}
+
+async function autoScrapeCdomViaDialog() {
+  if (isAutoScrapingCdom) return;
+  isAutoScrapingCdom = true;
+  
+  console.log("[Diligence Sidecar] Attempting auto-scrape of CDOM via dialog click...");
+  
+  const btn = findDetailsButton();
+  if (!btn) {
+    console.log("[Diligence Sidecar] Could not find 'See all details' button.");
+    isAutoScrapingCdom = false;
+    return;
+  }
+
+  // Add scraping class to hide the modal visually
+  document.body.classList.add("diligence-auto-scraping");
+
+  // Click the button to open dialog
+  btn.click();
+
+  // Wait for the dialog to load its content (up to 3 seconds)
+  let attempts = 0;
+  const maxAttempts = 30; // 30 * 100ms = 3s
+  
+  const checkInterval = setInterval(() => {
+    attempts++;
+    const dialog = PropertyParser.getDialogContainer();
+    const dialogText = dialog ? (dialog.textContent || "").toLowerCase() : "";
+    const hasCdom = dialogText.includes("cumulative days on market") || 
+                    dialogText.includes("days on market") || 
+                    dialogText.includes("time on redfin") ||
+                    dialogText.includes("cdom");
+
+    if (hasCdom || attempts >= maxAttempts) {
+      clearInterval(checkInterval);
+      
+      if (hasCdom) {
+        console.log("[Diligence Sidecar] Auto-click detected CDOM details loaded.");
+        const data = PropertyParser.extractMetadata();
+        
+        // Calculate geography
+        const state = (data.address?.state || "").toUpperCase();
+        const zip = data.address?.zip || "";
+        const city = (data.address?.city || "").toLowerCase();
+        data.inTargetGeography = state === "WA" && (zip.startsWith("980") || zip.startsWith("981") || city === "seattle");
+
+        console.log("[Diligence Sidecar] Auto-click completed extraction:", data);
+        
+        chrome.runtime.sendMessage({
+          action: "NEW_LISTING_DETECTED",
+          data: data
+        }).catch(() => {});
+      } else {
+        console.log("[Diligence Sidecar] Auto-click timeout waiting for CDOM details.");
+      }
+
+      // Close the dialog and clean up
+      closeDetailsDialog();
+      setTimeout(() => {
+        document.body.classList.remove("diligence-auto-scraping");
+        isAutoScrapingCdom = false;
+      }, 150);
+    }
+  }, 100);
+}

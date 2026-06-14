@@ -22,6 +22,26 @@
     {
       "geometry": {
         "coordinates": [
+          -122.3844,
+          47.5612
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Alaska Junction",
+        "stationId": "ALASKA_JUNCTION_PLANNED",
+        "status": "planned",
+        "url": "https://www.soundtransit.org/system-expansion/west-seattle-link-extension",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
           -122.297714,
           47.422703
         ],
@@ -149,6 +169,26 @@
         "name": "Convention Center",
         "stationId": "T07",
         "url": "https://www.soundtransit.org/ride-with-us/stops-stations/convention-center-station",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
+          -122.3636,
+          47.5684
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line"
+        ],
+        "name": "Delridge",
+        "stationId": "DELRIDGE_PLANNED",
+        "status": "planned",
+        "url": "https://www.soundtransit.org/system-expansion/west-seattle-link-extension",
         "wheelchairBoarding": true
       },
       "type": "Feature"

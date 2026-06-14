@@ -7,11 +7,9 @@ function simulateLocalDiligence(listing) {
   const permitPromise = isSeattle ? fetchSeattlePermits(listing) : Promise.resolve([]);
   const crimePromise = isSeattle ? fetchSeattleCrime(listing) : Promise.resolve([]);
   const lightRailPromise = findNearestLightRailStations(listing, 2);
-  const riparianPromise = listing.parcel?.parcelId && listing.parcel?.boundary
-    ? fetchRiparianStreams(listing.parcel.boundary)
-    : Promise.resolve(null);
+  const cdomPromise = Promise.resolve(listing.cumulativeDaysOnMarket != null ? listing.cumulativeDaysOnMarket : null);
 
-  return Promise.all([permitPromise, crimePromise, lightRailPromise, riparianPromise]).then(([permits, crimes, lightRail, riparianStreams]) => {
+  return Promise.all([permitPromise, crimePromise, lightRailPromise, cdomPromise]).then(([permits, crimes, lightRail, cdomValue]) => {
     const nearestStations = lightRail.stations;
     const nearestStation = nearestStations[0] || null;
     const crimeScore = scoreCrime(crimes);
@@ -45,11 +43,13 @@ function simulateLocalDiligence(listing) {
         `$${Math.round(ppsf).toLocaleString()}/sq ft`
       ));
     }
-    if (riparianStreams !== null) {
+    
+    const cdomScore = scoreMlsCdom(cdomValue);
+    if (cdomScore !== null) {
       topics.push(createScoredTopic(
-        "riparian",
-        scoreRiparian(riparianStreams),
-        formatRiparianStatus(riparianStreams)
+        "mlsCdom",
+        cdomScore,
+        `${cdomValue} days on market`
       ));
     }
 
@@ -92,6 +92,7 @@ function findNearestLightRailStations(listing, limit = 2) {
           name: feature.properties?.name || "Unknown station",
           lines: feature.properties?.lines || [],
           url: feature.properties?.url || "",
+          status: feature.properties?.status || "existing",
           distanceMeters: Math.round(distanceMeters),
           distanceMiles: Number((distanceMeters / 1609.344).toFixed(2)),
           source: "sound-transit-gtfs",
@@ -443,13 +444,19 @@ function formatDistanceMiles(distanceMiles) {
 
 function formatNearestStationStatus(stations) {
   return stations
-    .map(station => `${station.name} ${formatDistanceMiles(station.distanceMiles)}`)
+    .map(station => {
+      const displayName = station.status === "planned" ? `${station.name} (Planned)` : station.name;
+      return `${displayName} ${formatDistanceMiles(station.distanceMiles)}`;
+    })
     .join(" · ");
 }
 
 function formatNearestStationSummary(stations) {
   return stations
-    .map(station => `${station.name} (${formatDistanceMiles(station.distanceMiles)})`)
+    .map(station => {
+      const displayName = station.status === "planned" ? `${station.name} (Planned)` : station.name;
+      return `${displayName} (${formatDistanceMiles(station.distanceMiles)})`;
+    })
     .join(" and ");
 }
 
@@ -542,6 +549,16 @@ function scorePricePerSqft(ppsf) {
     if (val >= breakpoints[i][0]) return breakpoints[i][1];
   }
   return 95;
+}
+
+function scoreMlsCdom(cdom) {
+  if (cdom === null || cdom === undefined || !Number.isFinite(Number(cdom))) return null;
+  const val = Number(cdom);
+  if (val <= 7) return 98;
+  if (val <= 30) return 88;
+  if (val <= 60) return 75;
+  if (val <= 120) return 55;
+  return 35;
 }
 
 function createScoredTopic(key, score, status) {

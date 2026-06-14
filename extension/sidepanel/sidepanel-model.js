@@ -86,7 +86,10 @@ function formatTopicSummary(report) {
   if (!report) return "Waiting for analysis";
   const topics = Array.isArray(report.topics) ? report.topics : [];
   if (!topics.length) return report.summary || "Analysis complete";
-  return topics.map(topic => `${topic.label} ${Math.round(topic.score)}`).join(" · ");
+  return topics
+    .filter(topic => topic.key !== "mlsCdom")
+    .map(topic => `${topic.label} ${Math.round(topic.score)}`)
+    .join(" · ");
 }
 
 function formatLocation(address) {

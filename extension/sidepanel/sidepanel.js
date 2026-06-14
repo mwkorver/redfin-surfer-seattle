@@ -4,7 +4,7 @@ let apiToken = "";
 let portfolioEtag = "";
 let apiConnectionValid = false;
 let backendSyncEnabled = true;
-let scoringWeights = { crime: 40, lightRail: 20, lotArea: 20, pricePerSqft: 20, riparian: 20 };
+let scoringWeights = { crime: 40, lightRail: 20, lotArea: 20, pricePerSqft: 20, mlsCdom: 20 };
 let connectionValidationTimer = null;
 let connectionValidationId = 0;
 let lightRailStationsPromise = null;
@@ -33,8 +33,8 @@ const weightLotAreaInput = document.getElementById("weight-lotarea");
 const weightLotAreaDisplay = document.getElementById("weight-lotarea-display");
 const weightPriceSqftInput = document.getElementById("weight-pricesqft");
 const weightPriceSqftDisplay = document.getElementById("weight-pricesqft-display");
-const weightRiparianInput = document.getElementById("weight-riparian");
-const weightRiparianDisplay = document.getElementById("weight-riparian-display");
+const weightMlsCdomInput = document.getElementById("weight-mlscdom");
+const weightMlsCdomDisplay = document.getElementById("weight-mlscdom-display");
 
 document.addEventListener("DOMContentLoaded", () => {
   loadState();
@@ -73,7 +73,7 @@ function loadState() {
     }
 
     const saved = res.scoring_weights || {};
-    scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20, riparian: saved.riparian ?? 20 };
+    scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20, mlsCdom: saved.mlsCdom ?? 20 };
     applyWeightInputs();
 
     chrome.storage.local.remove("auto_diligence_on_heart");
@@ -152,9 +152,9 @@ function setupEventListeners() {
     renderPortfolio();
   });
 
-  weightRiparianInput.addEventListener("input", () => {
-    scoringWeights.riparian = Number(weightRiparianInput.value);
-    weightRiparianDisplay.textContent = `${scoringWeights.riparian}%`;
+  weightMlsCdomInput.addEventListener("input", () => {
+    scoringWeights.mlsCdom = Number(weightMlsCdomInput.value);
+    weightMlsCdomDisplay.textContent = `${scoringWeights.mlsCdom}%`;
     chrome.storage.local.set({ scoring_weights: scoringWeights });
     renderPortfolio();
   });
@@ -235,7 +235,7 @@ function setupEventListeners() {
 
     if (changes.scoring_weights) {
       const saved = changes.scoring_weights.newValue || {};
-      scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20, riparian: saved.riparian ?? 20 };
+      scoringWeights = { crime: saved.crime ?? 40, lightRail: saved.lightRail ?? 20, lotArea: saved.lotArea ?? 20, pricePerSqft: saved.pricePerSqft ?? 20, mlsCdom: saved.mlsCdom ?? 20 };
       applyWeightInputs();
       renderPortfolio();
     }
@@ -257,8 +257,8 @@ function applyWeightInputs() {
   weightLotAreaDisplay.textContent = `${scoringWeights.lotArea}%`;
   weightPriceSqftInput.value = String(scoringWeights.pricePerSqft);
   weightPriceSqftDisplay.textContent = `${scoringWeights.pricePerSqft}%`;
-  weightRiparianInput.value = String(scoringWeights.riparian);
-  weightRiparianDisplay.textContent = `${scoringWeights.riparian}%`;
+  weightMlsCdomInput.value = String(scoringWeights.mlsCdom);
+  weightMlsCdomDisplay.textContent = `${scoringWeights.mlsCdom}%`;
 }
 
 function schedulePortfolioEnrichment() {
@@ -314,38 +314,56 @@ function triggerDiligence(sourceListing) {
   listing.analysisState = "running";
   renderPortfolio();
 
-  const work = ensureParcelForListing(listing)
-    .then(parcel => {
-      if (parcel) listing.parcel = parcel;
-    })
-    .then(() => {
-      return simulateLocalDiligence(listing);
-    });
-
-  work
-    .then(report => saveReport(listingKey, report))
-    .then(savedListing => {
-      queuePropertySync(savedListing);
-      return savedListing;
-    })
-    .catch(error => {
-      console.error("[Diligence Sidecar] Diligence failed:", error);
-      return saveReport(listingKey, {
-        aggregateScore: 0,
-        summary: `Analysis failed: ${error.message}`,
-        topics: [{
-          key: "connection",
-          label: "Connection",
-          score: 0,
-          weight: 1,
-          status: "error"
-        }]
+  const runPipeline = (updatedListing) => {
+    const work = ensureParcelForListing(updatedListing)
+      .then(parcel => {
+        if (parcel) updatedListing.parcel = parcel;
+      })
+      .then(() => {
+        return simulateLocalDiligence(updatedListing);
       });
-    })
-    .finally(() => {
-      runningListings.delete(listingKey);
-      renderPortfolio();
-    });
+
+    work
+      .then(report => saveReport(listingKey, report))
+      .then(savedListing => {
+        queuePropertySync(savedListing);
+        return savedListing;
+      })
+      .catch(error => {
+        console.error("[Diligence Sidecar] Diligence failed:", error);
+        return saveReport(listingKey, {
+          aggregateScore: 0,
+          summary: `Analysis failed: ${error.message}`,
+          topics: [{
+            key: "connection",
+            label: "Connection",
+            score: 0,
+            weight: 1,
+            status: "error"
+          }]
+        });
+      })
+      .finally(() => {
+        runningListings.delete(listingKey);
+        renderPortfolio();
+      });
+  };
+
+  // Attempt to query the active tab for a fresh DOM scrape before running diligence
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const activeTab = tabs[0];
+    if (activeTab && activeTab.url && getListingKey({ url: activeTab.url }) === listingKey) {
+      chrome.tabs.sendMessage(activeTab.id, { action: "GET_CURRENT_LISTING" }, (response) => {
+        if (response && response.success && response.data) {
+          console.log("[Diligence Sidecar] Re-run analysis merged fresh DOM scrape:", response.data);
+          Object.assign(listing, response.data);
+        }
+        runPipeline(listing);
+      });
+    } else {
+      runPipeline(listing);
+    }
+  });
 }
 
 function queuePropertySync(listing) {
@@ -507,7 +525,17 @@ function scheduleConnectionValidation() {
 
 function validateConnection(validationId) {
   if (!backendSyncEnabled) return;
-  fetch(buildApiUrl("properties"), {
+  const url = buildApiUrl("properties");
+  if (!url) {
+    if (validationId === connectionValidationId) {
+      apiConnectionValid = false;
+      connectionStatus.textContent = "Local analysis";
+      connectionStatus.className = "status-indicator disconnected";
+      renderPortfolio();
+    }
+    return;
+  }
+  fetch(url, {
     headers: {
       "Authorization": `Bearer ${apiToken}`
     }

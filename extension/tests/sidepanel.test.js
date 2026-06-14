@@ -263,8 +263,203 @@ test("side panel scripts load in browser order without missing globals", () => {
   assert.equal(typeof context.SidepanelRenderer.createLightRailDetails, "function");
 });
 
+test("PropertyParser.extractCdom handles script parsing, specific selector, and dialog ul list item pair", () => {
+  const mockDocument = {
+    querySelectorAll(selector) {
+      if (selector === "script") {
+        return [
+          { textContent: '{"homeId": 42, "cumulativeDaysOnMarket": 42}' }
+        ];
+      }
+      return [];
+    },
+    querySelector(selector) {
+      return null;
+    },
+    body: {
+      get innerText() {
+        return "";
+      }
+    }
+  };
+
+  const context = createContext({
+    document: mockDocument,
+    console,
+    window: {
+      location: {
+        href: "https://www.redfin.com/WA/Seattle/300-NW-47th-St-98107/home/42"
+      }
+    }
+  });
+
+  loadScript(context, "shared/parser.js");
+
+  // 1. Script parsing (should take priority)
+  const cdomFromScript = vm.runInContext("PropertyParser.extractCdom()", context);
+  assert.equal(cdomFromScript, 42);
+
+  // 2. Specific selector (with script returning null)
+  mockDocument.querySelectorAll = (selector) => {
+    if (selector === "script") return [];
+    return [];
+  };
+  mockDocument.querySelector = (selector) => {
+    if (selector === "#bp-dialog-content") {
+      return null;
+    }
+    if (selector === "#bp-dialog-content > div.DialogContent__body > div > div:nth-child(16) > ul:nth-child(1) > li:nth-child(2)") {
+      return { textContent: "45 days" };
+    }
+    return null;
+  };
+  const cdomFromSpecific = vm.runInContext("PropertyParser.extractCdom()", context);
+  assert.equal(cdomFromSpecific, 45);
+
+  // 3. Dialog list traversal (with script and specific selector returning null)
+  mockDocument.querySelector = (selector) => {
+    if (selector === "#bp-dialog-content") {
+      return {
+        querySelectorAll(sel) {
+          if (sel === "li") {
+            return [
+              { textContent: "Cumulative Days on Market" },
+              { textContent: "48 days" }
+            ];
+          }
+          return [];
+        }
+      };
+    }
+    return null;
+  };
+  mockDocument.querySelectorAll = (selector) => {
+    return [];
+  };
+  const cdomFromDialogList = vm.runInContext("PropertyParser.extractCdom()", context);
+  assert.equal(cdomFromDialogList, 48);
+
+  // 4. Priority check (cumulativeDaysOnMarket should be chosen over daysOnMarket fallback)
+  mockDocument.querySelectorAll = (selector) => {
+    if (selector === "script") {
+      return [
+        { textContent: '{"homeId": 42, "daysOnMarket": 88, "cumulativeDaysOnMarket": 37}' }
+      ];
+    }
+    return [];
+  };
+  mockDocument.querySelector = (selector) => null;
+  const cdomPriority = vm.runInContext("PropertyParser.extractCdom()", context);
+  assert.equal(cdomPriority, 37);
+
+  // 5. Sub-day unit check (should return 0 instead of matching hours/minutes as days)
+  mockDocument.querySelectorAll = (selector) => [];
+  mockDocument.querySelector = (selector) => null;
+  mockDocument.body = {
+    get innerText() {
+      return "Time on Redfin: 18 hours";
+    }
+  };
+  const cdomSubDayHours = vm.runInContext("PropertyParser.extractCdom()", context);
+  assert.equal(cdomSubDayHours, 0);
+
+  mockDocument.body = {
+    get innerText() {
+      return "18 hours on Redfin";
+    }
+  };
+  const cdomSubDayHoursPre = vm.runInContext("PropertyParser.extractCdom()", context);
+  assert.equal(cdomSubDayHoursPre, 0);
+
+  mockDocument.body = {
+    get innerText() {
+      return "Time on Redfin: 5 days";
+    }
+  };
+  const cdomDaysMatch = vm.runInContext("PropertyParser.extractCdom()", context);
+  assert.equal(cdomDaysMatch, 5);
+});
+
 function flattenText(element) {
   return [element.textContent, ...element.children.map(flattenText)]
     .filter(Boolean)
     .join(" ");
 }
+
+test("validateConnection handles null/empty/invalid settings gracefully without throwing", () => {
+  const element = {
+    addEventListener() {},
+    classList: { toggle() {} },
+    value: "",
+    checked: false,
+    textContent: ""
+  };
+  const context = createContext({
+    document: {
+      addEventListener() {},
+      getElementById() {
+        return element;
+      }
+    },
+    chrome: {
+      runtime: {
+        getURL(value) {
+          return value;
+        },
+        onMessage: { addListener() {} },
+        sendMessage() {
+          return Promise.resolve();
+        }
+      },
+      storage: {
+        local: {
+          get() {},
+          set() {},
+          remove() {}
+        },
+        onChanged: { addListener() {} }
+      },
+      tabs: { create() {} }
+    },
+    clearTimeout,
+    fetch() {
+      throw new Error("fetch should not be called with null/empty/invalid settings");
+    },
+    requestAnimationFrame() {},
+    setTimeout
+  });
+
+  [
+    "shared/scoring.js",
+    "sidepanel/sidepanel-model.js",
+    "sidepanel/sidepanel-api.js",
+    "sidepanel/sidepanel-analysis.js",
+    "sidepanel/sidepanel-storage.js",
+    "sidepanel/sidepanel-renderer.js",
+    "sidepanel/sidepanel.js"
+  ].forEach(filename => loadScript(context, filename));
+
+  assert.equal(typeof context.validateConnection, "function");
+
+  assert.doesNotThrow(() => {
+    context.validateConnection(1);
+  });
+});
+
+test("planned stations format status and summary correctly", () => {
+  const context = createContext();
+  loadScript(context, "sidepanel/sidepanel-analysis.js");
+
+  const stations = [
+    { name: "Delridge", distanceMiles: 0.5, status: "planned" },
+    { name: "Beacon Hill", distanceMiles: 1.2, status: "existing" }
+  ];
+
+  const statusText = context.formatNearestStationStatus(stations);
+  const summaryText = context.formatNearestStationSummary(stations);
+
+  assert.equal(statusText, "Delridge (Planned) 0.50 mi · Beacon Hill 1.20 mi");
+  assert.equal(summaryText, "Delridge (Planned) (0.50 mi) and Beacon Hill (1.20 mi)");
+});
+
+

@@ -105,7 +105,7 @@ Streams classified as fish-bearing (Type F) under the King County Critical Areas
 | Light Rail | 20% | Distance breakpoints: 0 mi → 100, 0.5 mi → 90, 1 mi → 78, 2 mi → 58, 3 mi → 40, 5+ mi → 25 |
 | Lot Area | 20% | Breakpoints: 0–2k sqft → 20, 4k → 65, 6k → 80, 9.6k → 90, 20k+ → 98 |
 | Price/Sq.Ft. | 20% | Breakpoints: <$300 → 95, $500 → 62, $700 → 42, $900 → 25, $1200+ → 10 |
-| Riparian | 20% | No F streams within 165 ft → 90 · F streams present → 30 |
+| MLS CDOM | 20% | ≤7 days → 98 · ≤30 → 88 · ≤60 → 75 · ≤120 → 55 · 120+ → 35 |
 
 Topic weights are adjustable in the side panel settings. The aggregate score is a weighted average of all available topics.
 

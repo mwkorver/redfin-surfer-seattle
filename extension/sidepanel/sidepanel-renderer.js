@@ -55,6 +55,15 @@ function createPropertyCard(listing, index) {
   const price = document.createElement("div");
   price.className = "property-price";
   price.textContent = formatPrice(listing);
+  if (listing.cumulativeDaysOnMarket != null) {
+    const cdomSpan = document.createElement("span");
+    cdomSpan.style.color = "var(--muted)";
+    cdomSpan.style.fontSize = "10px";
+    cdomSpan.style.fontWeight = "normal";
+    cdomSpan.style.marginLeft = "6px";
+    cdomSpan.textContent = `(${listing.cumulativeDaysOnMarket}d CDOM)`;
+    price.appendChild(cdomSpan);
+  }
 
   const topicSummary = document.createElement("div");
   topicSummary.className = "topic-summary";
@@ -232,7 +241,8 @@ function createLightRailDetails(stations, dataset) {
 
     const name = document.createElement("span");
     name.className = "light-rail-station-name";
-    name.textContent = `${index + 1}. ${station.name || "Unknown station"}`;
+    const displayName = station.status === "planned" ? `${station.name} (Planned)` : station.name;
+    name.textContent = `${index + 1}. ${displayName || "Unknown station"}`;
 
     const lines = document.createElement("span");
     lines.className = "light-rail-station-lines";

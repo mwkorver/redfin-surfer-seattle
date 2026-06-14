@@ -13,7 +13,9 @@ function syncProperty(listing) {
 }
 
 function fetchPortfolioEtag() {
-  return fetch(buildApiUrl("properties"), {
+  const url = buildApiUrl("properties");
+  if (!url) return Promise.reject(new Error("API endpoint not configured"));
+  return fetch(url, {
     headers: {
       "Authorization": `Bearer ${apiToken}`
     }
@@ -25,6 +27,8 @@ function fetchPortfolioEtag() {
 }
 
 function sendProperty(listing, etag) {
+  const url = buildApiUrl("property");
+  if (!url) return Promise.reject(new Error("API endpoint not configured"));
   const headers = {
     "Content-Type": "application/json"
   };
@@ -36,7 +40,7 @@ function sendProperty(listing, etag) {
     headers["If-Match"] = etag;
   }
 
-  return fetch(buildApiUrl("property"), {
+  return fetch(url, {
     method: "POST",
     headers: headers,
     body: JSON.stringify({
@@ -49,6 +53,7 @@ function sendProperty(listing, etag) {
       listingKey: listing.listingKey,
       redfinHomeId: listing.redfinHomeId,
       savedAt: listing.savedAt,
+      cumulativeDaysOnMarket: listing.cumulativeDaysOnMarket,
       timestamp: new Date().toISOString()
     })
   }).then(async response => {
@@ -59,12 +64,18 @@ function sendProperty(listing, etag) {
 }
 
 function buildApiUrl(route) {
-  const base = new URL(apiEndpoint);
-  base.pathname = base.pathname.replace(/\/(?:property|properties)\/?$/, "/");
-  if (!base.pathname.endsWith("/")) base.pathname += "/";
-  base.search = "";
-  base.hash = "";
-  return new URL(route, base).toString();
+  if (!apiEndpoint) return "";
+  try {
+    const base = new URL(apiEndpoint);
+    base.pathname = base.pathname.replace(/\/(?:property|properties)\/?$/, "/");
+    if (!base.pathname.endsWith("/")) base.pathname += "/";
+    base.search = "";
+    base.hash = "";
+    return new URL(route, base).toString();
+  } catch (err) {
+    console.error("[Diligence Sidecar] Invalid API endpoint URL:", apiEndpoint, err);
+    return "";
+  }
 }
 
 function normalizeConfiguredApiEndpoint(value) {
