@@ -446,9 +446,15 @@ function renderPermitsTab(listing) {
   const searchRow = document.createElement("div");
   searchRow.className = "permit-search-row";
 
+  const addr = listing.address || {};
+  const addrParts = [addr.streetAddress, addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
+  const sdciUrl = addrParts
+    ? `https://maps.seattle.gov/sdcipermithistory/search?address=${encodeURIComponent(addrParts).replace(/%20/g, "+")}`
+    : "https://maps.seattle.gov/sdcipermithistory/";
+
   const searchLink = document.createElement("a");
   searchLink.className = "permits-search-btn";
-  searchLink.href = "https://maps.seattle.gov/sdcipermithistory/";
+  searchLink.href = sdciUrl;
   searchLink.target = "_blank";
   searchLink.rel = "noreferrer";
   searchLink.textContent = "Search SDCI Portal →";
