@@ -462,4 +462,133 @@ test("planned stations format status and summary correctly", () => {
   assert.equal(summaryText, "Delridge (Planned) (0.50 mi) and Beacon Hill (1.20 mi)");
 });
 
+test("getPermitStatusClass maps permit status correctly", () => {
+  const context = createContext();
+  loadScript(context, "sidepanel/sidepanel-renderer.js");
+
+  assert.equal(context.getPermitStatusClass("Completed"), "completed");
+  assert.equal(context.getPermitStatusClass("reviews completed"), "completed");
+  assert.equal(context.getPermitStatusClass("Closed"), "completed");
+  
+  assert.equal(context.getPermitStatusClass("Permit Issued"), "active");
+  assert.equal(context.getPermitStatusClass("in review"), "active");
+  
+  assert.equal(context.getPermitStatusClass("Canceled"), "cancelled");
+  assert.equal(context.getPermitStatusClass("EXPIRED"), "cancelled");
+  
+  assert.equal(context.getPermitStatusClass("something-else"), "other");
+  assert.equal(context.getPermitStatusClass(null), "other");
+});
+
+test("permit records normalize across SDCI datasets with differing schemas", () => {
+  const context = createContext();
+  loadScript(context, "sidepanel/sidepanel-analysis.js");
+
+  // Socrata URL columns come back as a plain string in some datasets and a
+  // { url } object in others; both must normalize to a string.
+  assert.equal(context.normalizeSocrataLink("https://example.com/a"), "https://example.com/a");
+  assert.equal(context.normalizeSocrataLink({ url: "https://example.com/b" }), "https://example.com/b");
+  assert.equal(context.normalizeSocrataLink(null), "");
+
+  // Config shapes mirror SEATTLE_PERMIT_SOURCES (a const, so not reachable on
+  // the vm global). These guard normalizePermitRecord's field-mapping logic.
+  const electricalCfg = { source: "Electrical", numField: "permitnum", typeFields: ["permittypemapped", "permitclass"], dateFields: ["issueddate", "applieddate", "completeddate"] };
+  const complaintCfg = { source: "Complaint", numField: "recordnum", typeFields: ["recordtypedesc", "recordtype"], dateFields: ["opendate"] };
+
+  // Electrical permit: standard permitnum schema, link as a plain string.
+  const electrical = context.normalizePermitRecord({
+    permitnum: "6959721-EL",
+    permittypemapped: "Electrical",
+    statuscurrent: "Expired",
+    description: "6.00kWDC Rooftop Photovoltaic Solar Installation",
+    link: "https://services.seattle.gov/portal/customize/LinkToRecord.aspx?altId=6959721-EL",
+    issueddate: "2023-04-18"
+  }, electricalCfg);
+  assert.equal(electrical.permitnum, "6959721-EL");
+  assert.equal(electrical.permittypedesc, "Electrical");
+  assert.equal(electrical.source, "Electrical");
+  assert.equal(electrical.date, "2023-04-18");
+  assert.equal(electrical.link, "https://services.seattle.gov/portal/customize/LinkToRecord.aspx?altId=6959721-EL");
+
+  // Code complaint: different field names (recordnum / recordtypedesc / opendate)
+  // and link as a { url } object.
+  const complaint = context.normalizePermitRecord({
+    recordnum: "009496-25CP",
+    recordtype: "Complaint",
+    recordtypedesc: "Construction",
+    statuscurrent: "Under Investigation",
+    description: "Grading violation - no permit",
+    link: { url: "https://services.seattle.gov/portal/customize/LinkToRecord.aspx?altId=009496-25CP" },
+    opendate: "2025-07-25T00:00:00.000"
+  }, complaintCfg);
+  assert.equal(complaint.permitnum, "009496-25CP");
+  assert.equal(complaint.permittypedesc, "Construction");
+  assert.equal(complaint.source, "Complaint");
+  assert.equal(complaint.date, "2025-07-25T00:00:00.000");
+  assert.equal(complaint.link, "https://services.seattle.gov/portal/customize/LinkToRecord.aspx?altId=009496-25CP");
+});
+
+test("createAnalysisDetails renders tab buttons", () => {
+  class Element {
+    constructor(tagName) {
+      this.tagName = tagName;
+      this.children = [];
+      this.className = "";
+      this.textContent = "";
+      this.hidden = false;
+      this.dataset = {};
+    }
+
+    append(...children) {
+      this.children.push(...children);
+    }
+
+    appendChild(child) {
+      this.children.push(child);
+      return child;
+    }
+
+    addEventListener(event, callback) {}
+  }
+
+  const context = createContext({
+    document: {
+      createElement(tagName) {
+        return new Element(tagName);
+      }
+    },
+    expandedListings: new Set(["test-listing-key"]),
+    formatSyncStatus(listing) {
+      return "synced";
+    },
+    renderPortfolio() {}
+  });
+
+  loadScript(context, "shared/scoring.js");
+  loadScript(context, "sidepanel/sidepanel-model.js");
+  loadScript(context, "sidepanel/sidepanel-renderer.js");
+
+  const listing = {
+    listingKey: "test-listing-key",
+    report: {
+      topics: [],
+      riparianStreams: [],
+      riparianStatus: "No F-type streams"
+    }
+  };
+
+  const details = context.createAnalysisDetails(listing);
+  assert.equal(details.className, "analysis-details");
+  assert.equal(details.hidden, false);
+
+  const tabsHeader = details.children.find(c => c.className === "details-tabs");
+  assert.ok(tabsHeader);
+  assert.equal(tabsHeader.children.length, 4);
+  assert.equal(tabsHeader.children[0].textContent, "Scorecard");
+  assert.equal(tabsHeader.children[1].textContent, "Parcel & Zoning");
+  assert.equal(tabsHeader.children[2].textContent, "Transit & Crime");
+  assert.equal(tabsHeader.children[3].textContent, "Permits Log");
+});
+
+
 

@@ -663,3 +663,372 @@ body {
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+/* Tabbed Layout Navigation */
+.details-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+  padding-bottom: 2px;
+}
+
+.tab-button {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 8px 4px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-button:hover {
+  color: var(--secondary);
+}
+
+.tab-button.active {
+  color: #93a9ff;
+  border-bottom-color: #93a9ff;
+}
+
+.tab-content {
+  animation: fadeInTab 0.2s ease-in-out;
+  padding-top: 4px;
+}
+
+@keyframes fadeInTab {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Riparian Banners */
+.riparian-banner {
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.riparian-banner.danger {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ff8e8e;
+}
+
+.riparian-banner.success {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.riparian-banner.unknown {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+/* Scorecard Progress Bars */
+.analysis-topic-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 32px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.analysis-topic-row:first-of-type {
+  border-top: 0;
+}
+
+.analysis-topic-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.analysis-topic-name {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.analysis-topic-status {
+  color: var(--muted);
+  font-size: 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-bar-container {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  height: 6px;
+  overflow: hidden;
+  width: 100px;
+}
+
+.topic-bar {
+  border-radius: 999px;
+  height: 100%;
+  transition: width 0.3s ease-out;
+}
+
+.topic-bar.good { background: var(--good); }
+.topic-bar.warn { background: var(--warn); }
+.topic-bar.bad { background: var(--bad); }
+.topic-bar.pending { background: var(--muted); }
+
+.analysis-topic-score {
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.analysis-topic-score.good { color: var(--good); }
+.analysis-topic-score.warn { color: var(--warn); }
+.analysis-topic-score.bad { color: var(--bad); }
+.analysis-topic-score.pending { color: var(--muted); }
+
+/* Parcel Tab Styling */
+.parcel-unavailable {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 15px 0;
+  text-align: center;
+}
+
+.parcel-links {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.parcel-links a {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #93a9ff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 6px 10px;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.parcel-links a:hover {
+  background: rgba(147, 169, 255, 0.1);
+  border-color: rgba(147, 169, 255, 0.3);
+  color: #fff;
+  text-decoration: none;
+}
+
+/* Transit & Crime Tab */
+.section-heading {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 14px 2px 8px;
+  text-transform: uppercase;
+}
+
+.crime-stats-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+  padding: 0 2px;
+}
+
+.crime-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  color: var(--secondary);
+  font-size: 9px;
+  font-weight: 600;
+  padding: 3px 6px;
+  text-transform: uppercase;
+}
+
+.crime-recent-list {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+}
+
+.crime-recent-item {
+  display: flex;
+  gap: 12px;
+  padding: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.crime-recent-item:last-child {
+  border-bottom: 0;
+}
+
+.crime-recent-date {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  width: 42px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.crime-recent-desc-container {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.crime-recent-category {
+  color: var(--secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.crime-recent-desc {
+  color: var(--muted);
+  font-size: 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crime-unavailable {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 10px 2px;
+}
+
+/* Permits Tab Styling */
+.permit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.permit-item-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.permit-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.permit-item-num {
+  color: #93a9ff;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.permit-item-num:hover {
+  text-decoration: underline;
+}
+
+.permit-status-badge {
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  text-transform: uppercase;
+}
+
+.permit-status-badge.completed {
+  background: rgba(34, 197, 94, 0.1);
+  color: #86efac;
+}
+
+.permit-status-badge.active {
+  background: rgba(245, 158, 11, 0.1);
+  color: #fde047;
+}
+
+.permit-status-badge.cancelled {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+}
+
+.permit-status-badge.other {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--secondary);
+}
+
+.permit-item-type {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.permit-item-desc {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.permits-unavailable {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 15px 0;
+  text-align: center;
+}
+
+.permit-search-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.permits-search-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: var(--secondary);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 7px 14px;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.permits-search-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+

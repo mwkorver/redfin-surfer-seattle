@@ -390,7 +390,7 @@ function renderPermitsTab(listing) {
 
   const permitHeading = document.createElement("div");
   permitHeading.className = "section-heading";
-  permitHeading.textContent = `Seattle Building Permits (${listing.report?.permitCount || 0} Total)`;
+  permitHeading.textContent = `Seattle Permits & Records (${listing.report?.permitCount || 0} Total)`;
   container.appendChild(permitHeading);
 
   const recentPermits = listing.report?.recentPermits;
@@ -423,7 +423,7 @@ function renderPermitsTab(listing) {
 
       const type = document.createElement("div");
       type.className = "permit-item-type";
-      type.textContent = p.permittypedesc;
+      type.textContent = p.source ? `${p.source} · ${p.permittypedesc}` : p.permittypedesc;
 
       const desc = document.createElement("div");
       desc.className = "permit-item-desc";
@@ -437,8 +437,8 @@ function renderPermitsTab(listing) {
     const noRecords = document.createElement("div");
     noRecords.className = "permits-unavailable";
     noRecords.textContent = listing.report?.permitCount === 0
-      ? "No building permit records found."
-      : "Detailed building permits log unavailable. Re-run analysis.";
+      ? "No permit or complaint records found."
+      : "Detailed permit log unavailable. Re-run analysis.";
     container.appendChild(noRecords);
   }
 
@@ -469,7 +469,7 @@ function getPermitStatusClass(status) {
   if (["completed", "reviews completed", "closed"].includes(norm)) {
     return "completed";
   }
-  if (["permit issued", "in review", "active", "issued"].includes(norm)) {
+  if (["permit issued", "in review", "active", "issued", "under investigation", "open"].includes(norm)) {
     return "active";
   }
   if (["canceled", "expired", "cancelled", "withdrawn"].includes(norm)) {

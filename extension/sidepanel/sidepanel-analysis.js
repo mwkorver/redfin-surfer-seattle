@@ -8,8 +8,9 @@ function simulateLocalDiligence(listing) {
   const crimePromise = isSeattle ? fetchSeattleCrime(listing) : Promise.resolve([]);
   const lightRailPromise = findNearestLightRailStations(listing, 2);
   const cdomPromise = Promise.resolve(listing.cumulativeDaysOnMarket != null ? listing.cumulativeDaysOnMarket : null);
+  const riparianPromise = fetchRiparianStreams(listing.parcel?.boundary);
 
-  return Promise.all([permitPromise, crimePromise, lightRailPromise, cdomPromise]).then(([permits, crimes, lightRail, cdomValue]) => {
+  return Promise.all([permitPromise, crimePromise, lightRailPromise, cdomPromise, riparianPromise]).then(([permits, crimes, lightRail, cdomValue, streams]) => {
     const nearestStations = lightRail.stations;
     const nearestStation = nearestStations[0] || null;
     const crimeScore = scoreCrime(crimes);
@@ -53,6 +54,41 @@ function simulateLocalDiligence(listing) {
       ));
     }
 
+    // Records arrive already normalized and merged across SDCI sources; take the
+    // 5 most recent for the log (full count is preserved in permitCount).
+    const recentPermits = permits.slice(0, 5).map(p => ({
+      permitnum: p.permitnum || "Unknown",
+      permittypedesc: p.permittypedesc || "Unknown Type",
+      statuscurrent: p.statuscurrent || "Unknown Status",
+      description: (p.description || "").substring(0, 200),
+      link: p.link || "",
+      source: p.source || ""
+    }));
+
+    // Sort and extract top 5 recent crime incidents
+    const sortedCrimes = [...crimes].sort((a, b) => {
+      const dateA = new Date(a.report_date_time || a.offense_date || 0);
+      const dateB = new Date(b.report_date_time || b.offense_date || 0);
+      return dateB - dateA;
+    });
+
+    const recentCrimes = sortedCrimes.slice(0, 5).map(c => ({
+      date: c.report_date_time || c.offense_date || "",
+      category: c.offense_category || "Unknown Category",
+      description: c.nibrs_offense_code_description || c.offense_sub_category || "Unknown Offense"
+    }));
+
+    // Calculate crime category breakdown
+    const crimeStats = {};
+    crimes.forEach(c => {
+      const cat = c.offense_category || "Other";
+      crimeStats[cat] = (crimeStats[cat] || 0) + 1;
+    });
+
+    // Format stream details
+    const streamList = streams || [];
+    const riparianStatus = formatRiparianStatus(streamList);
+
     return {
       aggregateScore: calculateAggregateScore(topics),
       summary: nearestStation
@@ -60,6 +96,14 @@ function simulateLocalDiligence(listing) {
         : `${crimes.length} recent crime incidents.`,
       topics,
       permitCount: permits.length,
+      recentPermits,
+      recentCrimes,
+      crimeStats,
+      riparianStreams: streamList.map(s => ({
+        name: s.attributes?.WatercourseNameS || "Unknown Stream",
+        type: s.attributes?.StreamType || "F"
+      })),
+      riparianStatus,
       nearestLightRail: nearestStations,
       lightRailDataset: lightRail.dataset,
       completedAt: new Date().toISOString()
@@ -352,6 +396,61 @@ function normalizeParcelStreet(value) {
     .join(" ");
 }
 
+// SDCI publishes its permit history across several Socrata datasets. The map at
+// maps.seattle.gov/sdcipermithistory aggregates all of them, so querying only
+// "Building Permits" (76t5-zqzr) misses electrical/trade/land-use permits and
+// code complaints. Each source is normalized to a common record shape below.
+const SEATTLE_PERMIT_SOURCES = [
+  { id: "76t5-zqzr", source: "Building",   numField: "permitnum", typeFields: ["permittypedesc", "permittypemapped", "permitclass"], dateFields: [] },
+  { id: "c4tj-daue", source: "Electrical", numField: "permitnum", typeFields: ["permittypemapped", "permitclass"], dateFields: ["issueddate", "applieddate", "completeddate"] },
+  { id: "c87v-5hwh", source: "Trade",      numField: "permitnum", typeFields: ["permittypemapped", "permittype", "permitclass"], dateFields: ["issueddate", "applieddate", "completeddate"] },
+  { id: "ht3q-kdvx", source: "Land Use",   numField: "permitnum", typeFields: ["permittypemapped", "permitclass"], dateFields: ["issueddate", "applieddate", "decisiondate"] },
+  { id: "ez4a-iug7", source: "Complaint",  numField: "recordnum", typeFields: ["recordtypedesc", "recordtype"], dateFields: ["opendate"] }
+];
+
+// Socrata URL columns are returned inconsistently across these datasets: some as
+// a plain string, others as a { url } object. Normalize to a string either way.
+function normalizeSocrataLink(link) {
+  if (!link) return "";
+  if (typeof link === "string") return link;
+  return link.url || "";
+}
+
+function firstNonEmptyField(record, fields) {
+  for (const field of fields) {
+    const value = record[field];
+    if (value != null && String(value).trim() !== "") return String(value).trim();
+  }
+  return "";
+}
+
+function normalizePermitRecord(record, config) {
+  return {
+    permitnum: record[config.numField] || "Unknown",
+    permittypedesc: firstNonEmptyField(record, config.typeFields) || "Unknown Type",
+    statuscurrent: record.statuscurrent || "Unknown Status",
+    description: record.description || "",
+    link: normalizeSocrataLink(record.link),
+    date: firstNonEmptyField(record, config.dateFields),
+    source: config.source
+  };
+}
+
+function fetchSeattlePermitSource(config, streetNumber, streetNameUpper) {
+  // street number/name are sanitized to alphanumerics by the caller, so the
+  // SoQL string is injection-safe. upper() makes the match case-insensitive —
+  // the datasets store addresses uppercase while Redfin sends mixed case.
+  const where = `upper(originaladdress1) like '%${streetNumber}%${streetNameUpper}%'`;
+  const url = `https://data.seattle.gov/resource/${config.id}.json?$limit=50&$where=${encodeURIComponent(where)}`;
+  return fetch(url)
+    .then(response => response.ok ? response.json() : Promise.reject(new Error(`${config.source} HTTP ${response.status}`)))
+    .then(data => Array.isArray(data) ? data.map(record => normalizePermitRecord(record, config)) : [])
+    .catch(error => {
+      console.warn(`[Diligence Sidecar] ${config.source} permit query failed:`, error);
+      return [];
+    });
+}
+
 function fetchSeattlePermits(listing) {
   const parts = listing.address.streetAddress.trim().split(/\s+/);
   if (parts.length < 2) return Promise.resolve([]);
@@ -361,18 +460,21 @@ function fetchSeattlePermits(listing) {
     const word = part.toUpperCase().replace(/[^A-Z0-9]/g, "");
     return !["N", "S", "E", "W", "NW", "NE", "SW", "SE", "UNIT", "APT", "STE", "SUITE"].includes(word);
   });
-  const streetName = (streetNamePart || "").replace(/[^A-Za-z0-9]/g, "");
+  const streetName = (streetNamePart || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
   if (!streetNumber || !streetName) return Promise.resolve([]);
 
-  const where = `originaladdress1 like '%${streetNumber}%${streetName}%'`;
-  const url = `https://data.seattle.gov/resource/76t5-zqzr.json?$limit=100&$where=${encodeURIComponent(where)}`;
-  return fetch(url)
-    .then(response => response.ok ? response.json() : Promise.reject(new Error(`Permit HTTP ${response.status}`)))
-    .then(data => Array.isArray(data) ? data : [])
-    .catch(error => {
-      console.warn("[Diligence Sidecar] Permit query failed:", error);
-      return [];
+  return Promise.all(
+    SEATTLE_PERMIT_SOURCES.map(config => fetchSeattlePermitSource(config, streetNumber, streetName))
+  ).then(results => {
+    const merged = results.flat();
+    // Most-recent first; records without any date (e.g. building permits) sort last.
+    merged.sort((a, b) => {
+      const timeA = a.date ? Date.parse(a.date) : -Infinity;
+      const timeB = b.date ? Date.parse(b.date) : -Infinity;
+      return timeB - timeA;
     });
+    return merged;
+  });
 }
 
 function fetchSeattleCrime(listing) {
@@ -392,18 +494,6 @@ function fetchSeattleCrime(listing) {
       console.warn("[Diligence Sidecar] Crime query failed:", error);
       return [];
     });
-}
-
-function scorePermits(permits) {
-  if (!permits.length) return 75;
-
-  let score = 88;
-  permits.forEach(permit => {
-    const status = (permit.statuscurrent || "").toLowerCase();
-    if (status === "expired" || status === "cancelled") score -= 8;
-    if (status && !["completed", "reviews completed", "permit issued"].includes(status)) score -= 2;
-  });
-  return clampScore(score);
 }
 
 function scoreCrime(crimes) {
@@ -462,12 +552,12 @@ function formatNearestStationSummary(stations) {
 
 function fetchRiparianStreams(boundaryGeoJson) {
   const arcgisPolygon = geojsonPolygonToArcGIS(boundaryGeoJson);
-  if (!arcgisPolygon) return Promise.resolve(null);
+  if (!arcgisPolygon) return Promise.resolve([]);
 
   return queryFStreams(arcgisPolygon)
     .catch(error => {
       console.warn("[Diligence Sidecar] Riparian stream query failed:", error);
-      return null;
+      return [];
     });
 }
 
