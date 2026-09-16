@@ -445,6 +445,22 @@ def put_property(event):
     updated_by = properties.get("updatedBy") or "chrome-extension"
     deleted_at = None
 
+    # A tombstoned key must not be silently revived by a stale client resyncing an
+    # old copy. A genuine re-heart carries a savedAt from after the deletion, so
+    # that is what distinguishes "added again" from "never noticed it was deleted".
+    tombstone = conn.execute("""
+        SELECT deletedAt FROM portfolio
+        WHERE listingKey = ? AND deletedAt IS NOT NULL
+    """, (listing_key,)).fetchone()
+    if tombstone and not is_newer_than(saved_at, tombstone[0]):
+        conn.close()
+        return error_response(
+            409,
+            "deleted",
+            "This property was deleted. Heart it again on Redfin to add it back.",
+            {"deletedAt": tombstone[0]},
+        )
+
     address_str = json.dumps(properties.get("address"))
     geo_str = json.dumps(properties.get("geo") or geojson_feature.get("geometry"))
     parcel_str = json.dumps(properties.get("parcel")) if properties.get("parcel") else None
@@ -657,6 +673,19 @@ def handle_s3_error(exc):
 
 def error_code(exc):
     return str(exc.response.get("Error", {}).get("Code", "Unknown"))
+
+
+def is_newer_than(timestamp, reference):
+    """True when timestamp is strictly newer than reference. Unparseable values
+    are treated as not newer, so a malformed savedAt cannot revive a tombstone."""
+    try:
+        return parse_timestamp(timestamp) > parse_timestamp(reference)
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+def parse_timestamp(value):
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
 def utc_now():

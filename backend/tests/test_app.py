@@ -181,6 +181,46 @@ class PropertyApiTests(unittest.TestCase):
         collection_after_delete = json.loads(listed_after_delete["body"])
         self.assertEqual(len(collection_after_delete["features"]), 0)
 
+    def test_tombstoned_property_rejects_stale_resync(self):
+        created = app.lambda_handler(event("PUT", body=record()), None)
+        etag = created["headers"]["ETag"]
+
+        deleted = app.lambda_handler(event("DELETE", headers={"if-match": etag}), None)
+        self.assertEqual(deleted["statusCode"], 200)
+        etag = deleted["headers"]["ETag"]
+
+        # A client that never saw the deletion resyncs its original copy.
+        stale = record()
+        stale["savedAt"] = "2020-01-01T00:00:00Z"
+        resynced = app.lambda_handler(
+            event("PUT", body=stale, headers={"if-match": etag}),
+            None,
+        )
+        self.assertEqual(resynced["statusCode"], 409)
+        self.assertEqual(json.loads(resynced["body"])["error"], "deleted")
+
+        listed = app.lambda_handler(event("GET", path="/properties", key=None), None)
+        self.assertEqual(len(json.loads(listed["body"])["features"]), 0)
+
+    def test_tombstoned_property_accepts_a_later_save(self):
+        created = app.lambda_handler(event("PUT", body=record()), None)
+        etag = created["headers"]["ETag"]
+
+        deleted = app.lambda_handler(event("DELETE", headers={"if-match": etag}), None)
+        etag = deleted["headers"]["ETag"]
+
+        # Hearting the listing again on Redfin produces a savedAt after the deletion.
+        rehearted = record()
+        rehearted["savedAt"] = "2999-01-01T00:00:00Z"
+        restored = app.lambda_handler(
+            event("PUT", body=rehearted, headers={"if-match": etag}),
+            None,
+        )
+        self.assertEqual(restored["statusCode"], 200)
+
+        listed = app.lambda_handler(event("GET", path="/properties", key=None), None)
+        self.assertEqual(len(json.loads(listed["body"])["features"]), 1)
+
     def test_adds_second_property_with_portfolio_etag(self):
         created = app.lambda_handler(event("POST", key=None, body=record()), None)
         first_etag = created["headers"]["ETag"]

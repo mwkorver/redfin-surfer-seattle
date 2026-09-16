@@ -9,8 +9,9 @@ function simulateLocalDiligence(listing) {
   const lightRailPromise = findNearestLightRailStations(listing, 2);
   const cdomPromise = Promise.resolve(listing.cumulativeDaysOnMarket != null ? listing.cumulativeDaysOnMarket : null);
   const riparianPromise = fetchRiparianStreams(listing.parcel?.boundary);
+  const oilTankPromise = isSeattle ? fetchSeattleOilTankRecords(listing) : Promise.resolve(null);
 
-  return Promise.all([permitPromise, crimePromise, lightRailPromise, cdomPromise, riparianPromise]).then(([permits, crimes, lightRail, cdomValue, streams]) => {
+  return Promise.all([permitPromise, crimePromise, lightRailPromise, cdomPromise, riparianPromise, oilTankPromise]).then(([permits, crimes, lightRail, cdomValue, streams, oilTankRecords]) => {
     const nearestStations = lightRail.stations;
     const nearestStation = nearestStations[0] || null;
     const crimeScore = scoreCrime(crimes);
@@ -104,6 +105,7 @@ function simulateLocalDiligence(listing) {
         type: s.attributes?.StreamType || "F"
       })),
       riparianStatus,
+      oilTank: buildOilTankFinding(oilTankRecords, listing),
       nearestLightRail: nearestStations,
       lightRailDataset: lightRail.dataset,
       completedAt: new Date().toISOString()
@@ -436,35 +438,190 @@ function normalizePermitRecord(record, config) {
   };
 }
 
-function fetchSeattlePermitSource(config, streetNumber, streetNameUpper) {
-  // street number/name are sanitized to alphanumerics by the caller, so the
-  // SoQL string is injection-safe. upper() makes the match case-insensitive —
-  // the datasets store addresses uppercase while Redfin sends mixed case.
-  const where = `upper(originaladdress1) like '%${streetNumber}%${streetNameUpper}%'`;
+function fetchSeattlePermitSource(config, parts) {
+  const where = buildStreetAddressWhere("originaladdress1", parts);
   const url = `https://data.seattle.gov/resource/${config.id}.json?$limit=50&$where=${encodeURIComponent(where)}`;
   return fetch(url)
     .then(response => response.ok ? response.json() : Promise.reject(new Error(`${config.source} HTTP ${response.status}`)))
-    .then(data => Array.isArray(data) ? data.map(record => normalizePermitRecord(record, config)) : [])
+    .then(data => Array.isArray(data)
+      ? data.filter(record => matchesStreetAddress(record.originaladdress1, parts)).map(record => normalizePermitRecord(record, config))
+      : [])
     .catch(error => {
       console.warn(`[Diligence Sidecar] ${config.source} permit query failed:`, error);
       return [];
     });
 }
 
-function fetchSeattlePermits(listing) {
-  const parts = listing.address.streetAddress.trim().split(/\s+/);
-  if (parts.length < 2) return Promise.resolve([]);
+// Shared by the SDCI permit and SFD oil tank lookups. Returns null when the
+// address cannot be split into a usable street number and street name.
+const DIRECTIONALS = ["N", "S", "E", "W", "NW", "NE", "SW", "SE"];
+
+function parseStreetAddressParts(streetAddress) {
+  const parts = String(streetAddress || "").trim().split(/\s+/);
+  if (parts.length < 2) return null;
 
   const streetNumber = parts[0].replace(/[^0-9A-Za-z]/g, "");
-  const streetNamePart = parts.slice(1).find(part => {
-    const word = part.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    return !["N", "S", "E", "W", "NW", "NE", "SW", "SE", "UNIT", "APT", "STE", "SUITE"].includes(word);
+  const words = parts.slice(1).map(part => part.toUpperCase().replace(/[^A-Z0-9]/g, ""));
+  const streetNamePart = words.find(word => !DIRECTIONALS.includes(word) && !["UNIT", "APT", "STE", "SUITE"].includes(word));
+  const streetName = streetNamePart || "";
+  if (!streetNumber || !streetName) return null;
+  // Directionals stop at the unit designator: "Unit B" is not a street direction.
+  const unitIndex = words.findIndex(word => ["UNIT", "APT", "STE", "SUITE"].includes(word));
+  const directionals = (unitIndex === -1 ? words : words.slice(0, unitIndex)).filter(word => DIRECTIONALS.includes(word));
+  return { streetNumber, streetName, directionals };
+}
+
+function addOrdinalSuffix(value) {
+  if (!/^\d+$/.test(value)) return value;
+  const n = Number(value);
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  const suffix = (mod100 >= 11 && mod100 <= 13) ? "TH"
+    : mod10 === 1 ? "ST" : mod10 === 2 ? "ND" : mod10 === 3 ? "RD" : "TH";
+  return `${value}${suffix}`;
+}
+
+// "97TH", "97" and (for a Redfin address typed as "14 TH") "14TH" all name the
+// same street. The City writes numbered streets both ways.
+function streetNameVariants(streetName) {
+  const bare = stripOrdinalSuffix(streetName);
+  return [...new Set([streetName, bare, addOrdinalSuffix(bare)])];
+}
+
+// SoQL predicate matching a street address. A bare like '%4747%4TH%' is a
+// substring match and returns 4747 34TH AVE NE for a house on 4TH AVE NE, so:
+// the number must start the field, and the street name must be a whole word in
+// any of its ordinal spellings. The number is anchored without a trailing space
+// because SDCI folds units into it ("3670-B DAYTON", "6729A 14TH"); the digit
+// run-on that allows (3670 → 36701) is removed client-side by
+// matchesStreetAddress. parts come from parseStreetAddressParts and are
+// alphanumeric, so the string is injection-safe.
+function buildStreetAddressWhere(field, parts) {
+  const padded = `(' ' || upper(${field}) || ' ')`;
+  const nameClauses = streetNameVariants(parts.streetName)
+    .map(name => `${padded} like '% ${name} %'`)
+    .join(" OR ");
+  return `starts_with(upper(${field}), '${parts.streetNumber}') AND (${nameClauses})`;
+}
+
+// Precise check applied to each row the coarse predicate returns. The number
+// must not run on into more digits, the street name must appear as a whole
+// word, and every directional in the listing (NE, NW, ...) must be present so
+// 7011 14TH AVE NW does not stand in for 7011 14TH AVE NE.
+function matchesStreetAddress(datasetAddress, parts) {
+  const upper = String(datasetAddress || "").toUpperCase();
+  if (!new RegExp(`^${parts.streetNumber}(?![0-9])`).test(upper)) return false;
+  const words = upper.replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/).filter(Boolean);
+  const nameOk = streetNameVariants(parts.streetName).some(name => words.includes(name));
+  if (!nameOk) return false;
+  return (parts.directionals || []).every(direction => words.includes(direction));
+}
+
+const SEATTLE_OIL_TANK_DATASET_ID = "xvj2-ai6y";
+const SEATTLE_OIL_TANK_DATASET_URL =
+  "https://data.seattle.gov/Built-Environment/Underground-Storage-Tank-UST-Records-Residential/xvj2-ai6y";
+
+// Seattle Fire Department records every residential heating-oil tank
+// decommissioning permit (code 6103). Only decommissionings are in the dataset,
+// so an empty result means either no tank ever existed or one was never dealt
+// with; the finding has to say that rather than claim the ground is clean.
+// Resolves to null (not []) when the answer is unknown, so the report can tell
+// "no record" apart from "could not check".
+function fetchSeattleOilTankRecords(listing) {
+  const parts = parseStreetAddressParts(listing.address?.streetAddress);
+  if (!parts) return Promise.resolve(null);
+
+  const where = buildStreetAddressWhere("address", parts);
+  const url = `https://data.seattle.gov/resource/${SEATTLE_OIL_TANK_DATASET_ID}.json?$limit=20&$where=${encodeURIComponent(where)}`;
+  return fetch(url)
+    .then(response => response.ok ? response.json() : Promise.reject(new Error(`Oil tank HTTP ${response.status}`)))
+    .then(data => Array.isArray(data) ? data.filter(record => matchesStreetAddress(record.address, parts)) : [])
+    .catch(error => {
+      console.warn("[Diligence Sidecar] Oil tank query failed:", error);
+      return null;
+    });
+}
+
+function stripOrdinalSuffix(value) {
+  return String(value || "").replace(/\b(\d+)(ST|ND|RD|TH)\b/gi, "$1");
+}
+
+const STREET_WORD_ABBREVIATIONS = Object.freeze({
+  AVENUE: "AVE", STREET: "ST", PLACE: "PL", ROAD: "RD", DRIVE: "DR", BOULEVARD: "BLVD",
+  COURT: "CT", LANE: "LN", TERRACE: "TER", PARKWAY: "PKWY",
+  NORTH: "N", SOUTH: "S", EAST: "E", WEST: "W",
+  NORTHWEST: "NW", NORTHEAST: "NE", SOUTHWEST: "SW", SOUTHEAST: "SE"
+});
+
+function normalizeStreetAddressForMatch(value) {
+  return stripOrdinalSuffix(String(value || "").toUpperCase())
+    .replace(/[^A-Z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => STREET_WORD_ABBREVIATIONS[word] || word)
+    .join(" ");
+}
+
+// "exact" when the dataset row names the same address as the listing once both
+// are normalized; "street" when only the number and street name agree, which the
+// UI surfaces so the reader knows to confirm it.
+function classifyOilTankMatch(listingStreetAddress, datasetAddress) {
+  return normalizeStreetAddressForMatch(listingStreetAddress) === normalizeStreetAddressForMatch(datasetAddress)
+    ? "exact"
+    : "street";
+}
+
+function parseTankSizeGallons(value) {
+  const match = String(value || "").match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+function normalizeOilTankRecord(record, listing) {
+  const dateDecommissioned = String(record.date_decommissioned || "").slice(0, 10);
+  const dateIssued = String(record.date_issued || "").slice(0, 10);
+  const year = Number((dateDecommissioned || dateIssued).slice(0, 4));
+  return {
+    matchQuality: classifyOilTankMatch(listing.address?.streetAddress, record.address),
+    permitNumber: record.permit_number || "",
+    dateIssued,
+    dateDecommissioned,
+    year: Number.isFinite(year) && year > 0 ? year : null,
+    tankSizeGallons: parseTankSizeGallons(record.tank_size),
+    tankSizeRaw: record.tank_size || "",
+    tankContent: record.tank_content || "",
+    typeDecommissioned: record.type_decommissioned || "",
+    fillMaterial: record.fill_material || "",
+    company: record.company || "",
+    datasetAddress: record.address || ""
+  };
+}
+
+function buildOilTankFinding(records, listing) {
+  const base = { matchQuality: null, recordCount: 0, datasetUrl: SEATTLE_OIL_TANK_DATASET_URL };
+  if (!Array.isArray(records)) return { status: "unavailable", ...base };
+  if (!records.length) return { status: "no-record", ...base };
+
+  // Headline the exact match if there is one, then the most recent decommissioning.
+  const normalized = records.map(record => normalizeOilTankRecord(record, listing));
+  normalized.sort((a, b) => {
+    if (a.matchQuality !== b.matchQuality) return a.matchQuality === "exact" ? -1 : 1;
+    return (b.dateDecommissioned || b.dateIssued).localeCompare(a.dateDecommissioned || a.dateIssued);
   });
-  const streetName = (streetNamePart || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-  if (!streetNumber || !streetName) return Promise.resolve([]);
+
+  return {
+    status: "decommissioned",
+    ...base,
+    recordCount: normalized.length,
+    ...normalized[0]
+  };
+}
+
+function fetchSeattlePermits(listing) {
+  const parts = parseStreetAddressParts(listing.address.streetAddress);
+  if (!parts) return Promise.resolve([]);
 
   return Promise.all(
-    SEATTLE_PERMIT_SOURCES.map(config => fetchSeattlePermitSource(config, streetNumber, streetName))
+    SEATTLE_PERMIT_SOURCES.map(config => fetchSeattlePermitSource(config, parts))
   ).then(results => {
     const merged = results.flat();
     // Most-recent first; records without any date (e.g. building permits) sort last.

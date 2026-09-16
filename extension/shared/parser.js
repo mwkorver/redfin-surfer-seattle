@@ -378,52 +378,79 @@ const PropertyParser = {
   },
 
   /**
-   * Checks if the active listing page is currently "Hearted" or "Favorited" by the user.
+   * True when the element looks like Redfin's Save/Favorite control.
    */
-  getPageHeartState() {
-    let foundFavoriteButton = false;
+  isFavoriteSaveButton(el) {
+    if (!el) return false;
+    const text = (el.innerText || "").trim().toLowerCase();
+    const label = (el.getAttribute('aria-label') || '').toLowerCase();
+    const className = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+    const testId = (el.getAttribute('data-testid') || '').toLowerCase();
+
+    return label.includes('favorite') ||
+      label.includes('save') ||
+      label.includes('remove') ||
+      testId.includes('save') ||
+      className.includes('favorite-button') ||
+      className.includes('save-button') ||
+      text === 'save' ||
+      text === 'saved' ||
+      text === 'favorite' ||
+      text === 'favorited';
+  },
+
+  /**
+   * True when a Save/Favorite control is currently in the hearted state.
+   */
+  isHeartButtonSaved(el) {
+    if (!el) return false;
+    const text = (el.innerText || "").toLowerCase();
+    const label = (el.getAttribute('aria-label') || '').toLowerCase();
+
+    return label.includes('remove') ||
+      label.includes('unfavorite') ||
+      label.includes('saved') ||
+      text.includes('favorited') ||
+      text.includes('saved') ||
+      el.classList.contains('is-favorite') ||
+      el.classList.contains('active') ||
+      el.getAttribute('aria-pressed') === 'true' ||
+      el.getAttribute('aria-checked') === 'true' ||
+      // Redfin renders the saved heart with a filled icon variant. Keep this as a
+      // second, independent signal so a label change alone does not blind us.
+      (typeof el.querySelector === 'function' && !!el.querySelector('[class*="favorite-filled"]'));
+  },
+
+  /**
+   * Returns the page's Save/Favorite button, preferring one already in the saved
+   * state so callers act on the same button getPageHeartState() reports on.
+   */
+  findPageHeartButton() {
+    let firstMatch = null;
 
     // Scan all button elements on the page
     const buttons = document.querySelectorAll('button');
     for (const btn of buttons) {
-      const text = btn.innerText.toLowerCase();
-      const label = (btn.getAttribute('aria-label') || '').toLowerCase();
-      const className = btn.className.toLowerCase();
-      const testId = (btn.getAttribute('data-testid') || '').toLowerCase();
+      if (!this.isFavoriteSaveButton(btn)) continue;
+      if (!firstMatch) firstMatch = btn;
 
-      // Check if this button is a Favorite/Save button
-      const isFavSaveBtn = 
-        label.includes('favorite') || 
-        label.includes('save') || 
-        label.includes('remove') ||
-        testId.includes('save') ||
-        className.includes('favorite-button') ||
-        className.includes('save-button') ||
-        text === 'save' ||
-        text === 'saved' ||
-        text === 'favorite' ||
-        text === 'favorited';
-
-      if (isFavSaveBtn) {
-        foundFavoriteButton = true;
-        // Determine if it is currently in a HEARTED / SAVED state.
-        if (
-          label.includes('remove') || 
-          label.includes('unfavorite') ||
-          label.includes('saved') ||
-          text.includes('favorited') || 
-          text.includes('saved') ||
-          btn.classList.contains('is-favorite') ||
-          btn.classList.contains('active') ||
-          btn.getAttribute('aria-pressed') === 'true'
-        ) {
-          console.log("[Diligence Sidecar] Found active saved button:", label || text || className);
-          return "saved";
-        }
+      if (this.isHeartButtonSaved(btn)) {
+        const describe = btn.getAttribute('aria-label') || btn.innerText || btn.className;
+        console.log("[Diligence Sidecar] Found active saved button:", describe);
+        return btn;
       }
     }
 
-    return foundFavoriteButton ? "unsaved" : "unknown";
+    return firstMatch;
+  },
+
+  /**
+   * Checks if the active listing page is currently "Hearted" or "Favorited" by the user.
+   */
+  getPageHeartState() {
+    const button = this.findPageHeartButton();
+    if (!button) return "unknown";
+    return this.isHeartButtonSaved(button) ? "saved" : "unsaved";
   },
 
   isPageHearted() {

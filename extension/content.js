@@ -1,5 +1,9 @@
 let cdomExtractedOnActivePage = false;
 let isAutoScrapingCdom = false;
+// Set while the side panel drives the heart button, so the capturing click
+// listener below ignores our own synthetic click instead of re-entering the
+// heart pipeline a second time.
+let suppressHeartClickHandling = false;
 
 // Inject css to hide details modal during auto-scraping
 const autoScrapingStyle = document.createElement("style");
@@ -281,6 +285,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // SPA navigation happened, wait slightly for the DOM to render new info
     runAndSend(1200);
     sendResponse({ success: true });
+  } else if (request.action === "UNHEART_LISTING") {
+    if (!isTopFrame()) return false;
+    unheartCurrentPage(request.listingKey).then(sendResponse).catch(error => {
+      sendResponse({ success: false, reason: "error", error: error.message });
+    });
   }
   return true; // Keep message channel open for async response
 });
@@ -291,6 +300,9 @@ document.addEventListener('click', (e) => {
   try {
     const target = e.target;
     if (!target) return;
+
+    // Ignore the synthetic click the side panel's delete button just dispatched.
+    if (suppressHeartClickHandling) return;
 
     // Check if the clicked button looks like a Redfin Save/Favorite button
     const eventPath = typeof e.composedPath === "function" ? e.composedPath() : [];
@@ -374,6 +386,90 @@ function handleListingCardHeartToggle(button, containerInfo) {
   });
 }
 
+// Drive Redfin's own heart control on behalf of the side panel's delete button.
+// Removal is reported only once the DOM confirms the listing is no longer saved:
+// a listing that is still hearted must stay in the portfolio, or the next page
+// view will simply re-ingest it.
+async function unheartCurrentPage(listingKey) {
+  // findPageHeartButton scans the whole page, so on a search or map view it could
+  // pick up some other listing's heart. Only act when this page is the requested
+  // listing's own detail view.
+  if (!isPropertyDetailPage()) {
+    return { success: false, reason: "wrong_page" };
+  }
+  if (listingKey && getRedfinListingKey(window.location.href) !== listingKey) {
+    return { success: false, reason: "wrong_page" };
+  }
+
+  const button = PropertyParser.findPageHeartButton();
+  if (!button) {
+    return { success: false, reason: "button_not_found" };
+  }
+
+  const previousHeartState = PropertyParser.getPageHeartState();
+  if (previousHeartState !== "saved") {
+    return { success: false, reason: "not_saved" };
+  }
+
+  clickWithoutReentering(button);
+
+  // Clicking a saved heart no longer un-favorites directly: Redfin answers with a
+  // "What would you like to do?" dialog offering Change lists / Remove from Favorites.
+  const confirmButton = await waitForRemoveFromFavoritesButton();
+  if (confirmButton) {
+    clickWithoutReentering(confirmButton);
+  }
+
+  const heartState = await waitForPageHeartState(previousHeartState);
+  if (heartState === "saved") {
+    return { success: false, reason: "not_unhearted" };
+  }
+
+  await chrome.runtime.sendMessage({
+    action: "REMOVE_HEARTED_LISTING",
+    listingKey: listingKey,
+    url: window.location.href
+  }).catch(() => {});
+
+  return { success: true };
+}
+
+// .click() dispatches synchronously, so the flag covers exactly our own event and
+// the capturing listener above skips it.
+function clickWithoutReentering(element) {
+  suppressHeartClickHandling = true;
+  try {
+    element.click();
+  } finally {
+    suppressHeartClickHandling = false;
+  }
+}
+
+function findRemoveFromFavoritesButton() {
+  const dialog = document.querySelector('[role="dialog"]');
+  const scope = dialog || document;
+  return Array.from(scope.querySelectorAll('button'))
+    .find(candidate => /remove from favorites/i.test(candidate.innerText || "")) || null;
+}
+
+function waitForRemoveFromFavoritesButton() {
+  const delays = [200, 450, 900];
+
+  return new Promise(resolve => {
+    const check = index => {
+      setTimeout(() => {
+        const button = findRemoveFromFavoritesButton();
+        if (button || index === delays.length - 1) {
+          resolve(button);
+          return;
+        }
+        check(index + 1);
+      }, delays[index]);
+    };
+    check(0);
+  });
+}
+
 function waitForPageHeartState(previousState) {
   const delays = [350, 800, 1500];
 
@@ -395,18 +491,7 @@ function waitForPageHeartState(previousState) {
 }
 
 function isHeartButtonSaved(button) {
-  if (!button) return false;
-  const label = (button.getAttribute('aria-label') || '').toLowerCase();
-  const text = (button.innerText || "").toLowerCase();
-  return label.includes('remove') ||
-    label.includes('unfavorite') ||
-    label.includes('saved') ||
-    text.includes('favorited') ||
-    text.includes('saved') ||
-    button.classList.contains('is-favorite') ||
-    button.classList.contains('active') ||
-    button.getAttribute('aria-pressed') === 'true' ||
-    button.getAttribute('aria-checked') === 'true';
+  return PropertyParser.isHeartButtonSaved(button);
 }
 
 function waitForCardHeartState(listingUrl, previousSaved) {

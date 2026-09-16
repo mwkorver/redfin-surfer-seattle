@@ -14,6 +14,10 @@ const syncingListings = new Set();
 const expandedListings = new Set();
 const parcelResolutionPromises = new Map();
 const scheduledListings = new Set();
+const deletingListings = new Set();
+const deleteErrors = new Map();
+// listingKey of the property open in the active tab; only that row may be deleted.
+let currentListingKey = "";
 let storageWriteQueue = Promise.resolve();
 let backendSyncQueue = Promise.resolve();
 
@@ -35,6 +39,10 @@ const weightPriceSqftInput = document.getElementById("weight-pricesqft");
 const weightPriceSqftDisplay = document.getElementById("weight-pricesqft-display");
 const weightMlsCdomInput = document.getElementById("weight-mlscdom");
 const weightMlsCdomDisplay = document.getElementById("weight-mlscdom-display");
+const stuckListingDetails = document.getElementById("details-stuck-listing");
+const selectStuckListing = document.getElementById("select-stuck-listing");
+const btnForceRemove = document.getElementById("btn-force-remove");
+const forceRemoveStatus = document.getElementById("force-remove-status");
 
 document.addEventListener("DOMContentLoaded", () => {
   loadState();
@@ -58,6 +66,8 @@ function loadState() {
       const listingKey = getListingKey(listing);
       if (listingKey) portfolio[listingKey] = normalizeStoredListing(listing, listingKey);
     });
+
+    currentListingKey = res.current_listing ? getListingKey(res.current_listing) : "";
 
     apiEndpoint = normalizeConfiguredApiEndpoint(res.aws_api_url);
     inputApiUrl.value = apiEndpoint;
@@ -159,9 +169,18 @@ function setupEventListeners() {
     renderPortfolio();
   });
 
+  stuckListingDetails.addEventListener("toggle", () => {
+    if (!stuckListingDetails.open) return;
+    forceRemoveStatus.textContent = "";
+    refreshStuckListingOptions();
+  });
+
+  btnForceRemove.addEventListener("click", forceRemoveListing);
+
   propertyList.addEventListener("click", event => {
     const detailsButton = event.target.closest(".details-toggle");
     const runButton = event.target.closest(".run-button");
+    const deleteButton = event.target.closest(".delete-button");
     const row = event.target.closest(".property-row");
     if (!row) return;
 
@@ -171,6 +190,12 @@ function setupEventListeners() {
     if (detailsButton) {
       event.stopPropagation();
       toggleAnalysisDetails(listing.listingKey);
+      return;
+    }
+
+    if (deleteButton) {
+      event.stopPropagation();
+      deleteListing(listing);
       return;
     }
 
@@ -186,7 +211,7 @@ function setupEventListeners() {
 
   propertyList.addEventListener("keydown", event => {
     if (event.key !== "Enter" && event.key !== " ") return;
-    if (event.target.closest(".details-toggle, .run-button")) return;
+    if (event.target.closest(".details-toggle, .run-button, .delete-button")) return;
     const row = event.target.closest(".property-row");
     const listing = row && portfolio[row.dataset.listingKey];
     const listingUrl = listing && getListingUrl(listing);
@@ -200,6 +225,12 @@ function setupEventListeners() {
       portfolio = changes.hearted_listings.newValue || {};
       renderPortfolio();
       schedulePortfolioEnrichment();
+    }
+
+    if (changes.current_listing) {
+      const listing = changes.current_listing.newValue;
+      currentListingKey = listing ? getListingKey(listing) : "";
+      renderPortfolio();
     }
 
     if (changes.aws_api_url) {
@@ -364,6 +395,101 @@ function triggerDiligence(sourceListing) {
       runPipeline(listing);
     }
   });
+}
+
+// Escape hatch for listings whose Redfin page no longer loads, so the heart is
+// unreachable and the normal delete can never be offered. Storage only: the listing
+// returns if it is still hearted, which the settings copy says out loud.
+function refreshStuckListingOptions() {
+  const previous = selectStuckListing.value;
+  selectStuckListing.replaceChildren();
+
+  Object.values(portfolio)
+    .filter(listing => listing?.listingKey && listing?.address?.streetAddress)
+    .sort((a, b) => a.address.streetAddress.localeCompare(b.address.streetAddress))
+    .forEach(listing => {
+      const option = document.createElement("option");
+      option.value = listing.listingKey;
+      option.textContent = listing.address.streetAddress;
+      selectStuckListing.appendChild(option);
+    });
+
+  if (previous) selectStuckListing.value = previous;
+  btnForceRemove.disabled = selectStuckListing.options.length === 0;
+}
+
+function forceRemoveListing() {
+  const listingKey = selectStuckListing.value;
+  if (!listingKey) return;
+
+  const label = portfolio[listingKey]?.address?.streetAddress || listingKey;
+  btnForceRemove.disabled = true;
+
+  chrome.runtime.sendMessage({ action: "REMOVE_HEARTED_LISTING", listingKey })
+    .then(() => {
+      refreshStuckListingOptions();
+      forceRemoveStatus.textContent = `Removed ${label}.`;
+    })
+    .catch(() => {
+      btnForceRemove.disabled = false;
+      forceRemoveStatus.textContent = `Could not remove ${label}.`;
+    });
+}
+
+// Deleting a property means un-hearting it on Redfin. The heart is the source of
+// truth for ingestion, so clearing storage alone would only hide the listing until
+// the next page view re-ingested it. The content script drives Redfin's own control
+// and reports back; only a confirmed un-heart removes anything.
+function deleteListing(listing) {
+  const listingKey = listing.listingKey;
+  if (!listingKey || deletingListings.has(listingKey)) return;
+
+  deletingListings.add(listingKey);
+  deleteErrors.delete(listingKey);
+  renderPortfolio();
+
+  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+    const tabId = tabs?.[0]?.id;
+    if (tabId === undefined) {
+      finishDelete(listingKey, "No active tab to un-heart from.");
+      return;
+    }
+
+    chrome.tabs.sendMessage(tabId, { action: "UNHEART_LISTING", listingKey })
+      .then(result => {
+        // On success the REMOVE_HEARTED_LISTING storage change drives the re-render.
+        finishDelete(listingKey, result?.success ? "" : describeDeleteFailure(result?.reason));
+      })
+      .catch(() => {
+        finishDelete(listingKey, "Open this listing on Redfin, then try again.");
+      });
+  });
+}
+
+function finishDelete(listingKey, message) {
+  deletingListings.delete(listingKey);
+  if (message) {
+    deleteErrors.set(listingKey, message);
+  } else {
+    deleteErrors.delete(listingKey);
+  }
+  renderPortfolio();
+}
+
+function describeDeleteFailure(reason) {
+  if (reason === "button_not_found") {
+    return "Could not find Redfin's save button on this page.";
+  }
+  if (reason === "wrong_page") {
+    return "Open this listing on Redfin, then try again.";
+  }
+  if (reason === "not_saved") {
+    return "This listing is no longer hearted on Redfin.";
+  }
+  if (reason === "not_unhearted") {
+    return "Redfin did not un-heart this listing. Try the heart on the page.";
+  }
+  return "Could not remove this listing. Try again.";
 }
 
 function queuePropertySync(listing) {

@@ -79,6 +79,14 @@ function createPropertyCard(listing, index) {
 
   info.append(address, location, price, topicSummary, runButton);
 
+  const deleteError = deleteErrors.get(listing.listingKey);
+  if (deleteError) {
+    const errorText = document.createElement("div");
+    errorText.className = "delete-error";
+    errorText.textContent = deleteError;
+    info.appendChild(errorText);
+  }
+
   const scoreColumn = document.createElement("div");
   scoreColumn.className = "score-column";
 
@@ -100,6 +108,22 @@ function createPropertyCard(listing, index) {
     detailsButton.setAttribute("aria-label", `Show analysis details for ${listing.address.streetAddress}`);
     detailsButton.textContent = "⌄";
     scoreColumn.appendChild(detailsButton);
+  }
+
+  // Deleting means un-hearting on Redfin, so the control only exists while the
+  // listing is the one open in the active tab and its heart is reachable.
+  if (listing.listingKey === currentListingKey) {
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "delete-button";
+    deleteButton.type = "button";
+    deleteButton.disabled = deletingListings.has(listing.listingKey);
+    deleteButton.title = "Un-heart on Redfin and remove from portfolio";
+    deleteButton.setAttribute(
+      "aria-label",
+      `Remove ${listing.address.streetAddress} from portfolio by un-hearting it on Redfin`
+    );
+    deleteButton.textContent = deletingListings.has(listing.listingKey) ? "…" : "✕";
+    scoreColumn.appendChild(deleteButton);
   }
 
   row.append(image, info, scoreColumn);
@@ -200,6 +224,8 @@ function renderScorecardTab(listing) {
     banner.textContent = `Riparian data unavailable. Re-run analysis.`;
     container.appendChild(banner);
   }
+
+  container.appendChild(createOilTankBanner(listing.report?.oilTank));
 
   // Summary text
   if (listing.report?.summary) {
@@ -384,9 +410,135 @@ function renderTransitTab(listing) {
   return container;
 }
 
+// The oil tank finding is deliberately unscored: the dataset only holds
+// decommissioning permits, so its absence proves nothing about the ground, and
+// its presence is a permit record rather than an inspection. Both renderers
+// keep that distinction in the copy.
+const OIL_TANK_CAVEAT = "A permit record, not an inspection of the ground today.";
+
+function formatOilTankChips(oilTank) {
+  const chips = [];
+  if (oilTank.year) chips.push(`decommissioned ${oilTank.year}`);
+  if (oilTank.tankSizeGallons) chips.push(`${oilTank.tankSizeGallons} gal`);
+  if (oilTank.typeDecommissioned) chips.push(oilTank.typeDecommissioned);
+  return chips;
+}
+
+function formatOilTankMatchLabel(oilTank) {
+  return oilTank.matchQuality === "exact"
+    ? "exact address match"
+    : "street-number match — confirm the address";
+}
+
+function createOilTankBanner(oilTank) {
+  const banner = document.createElement("div");
+  if (!oilTank || oilTank.status === "unavailable") {
+    banner.className = "riparian-banner unknown";
+    banner.textContent = "Oil tank data unavailable. Re-run analysis.";
+  } else if (oilTank.status === "no-record") {
+    banner.className = "riparian-banner unknown";
+    banner.textContent = "No oil tank decommissioning permit on file";
+  } else {
+    banner.className = "riparian-banner success";
+    const year = oilTank.year ? ` ${oilTank.year}` : "";
+    const parts = [];
+    if (oilTank.tankSizeGallons) parts.push(`${oilTank.tankSizeGallons} gal`);
+    parts.push(formatOilTankMatchLabel(oilTank));
+    banner.textContent = `✓ Buried oil tank decommissioned${year} · ${parts.join(" · ")}`;
+  }
+  return banner;
+}
+
+function createOilTankSection(oilTank) {
+  const section = document.createElement("div");
+  section.className = "oil-tank-section";
+
+  const heading = document.createElement("div");
+  heading.className = "section-heading";
+  heading.textContent = "Buried Oil Tank";
+  section.appendChild(heading);
+
+  const card = document.createElement("div");
+  card.className = "permit-item-card oil-tank-card";
+  section.appendChild(card);
+
+  const headline = document.createElement("div");
+  headline.className = "oil-tank-headline";
+  card.appendChild(headline);
+
+  if (!oilTank || oilTank.status === "unavailable") {
+    headline.textContent = "Oil tank records could not be checked";
+    const note = document.createElement("div");
+    note.className = "oil-tank-caveat";
+    note.textContent = "Seattle addresses only. Re-run analysis to try again.";
+    card.appendChild(note);
+    return section;
+  }
+
+  if (oilTank.status === "no-record") {
+    headline.textContent = "No oil tank decommissioning permit on file";
+    const note = document.createElement("div");
+    note.className = "oil-tank-caveat";
+    note.textContent = "This does not mean there is no tank — only that Seattle has no record of one being decommissioned at this address.";
+    card.appendChild(note);
+    card.appendChild(createOilTankSourceLine(oilTank, "no match"));
+    return section;
+  }
+
+  headline.textContent = oilTank.matchQuality === "exact"
+    ? "The buried oil tank is already decommissioned"
+    : "A buried oil tank at this street number was decommissioned";
+
+  const chips = formatOilTankChips(oilTank);
+  if (chips.length) {
+    const chipRow = document.createElement("div");
+    chipRow.className = "oil-tank-chips";
+    chipRow.textContent = chips.join(" · ");
+    card.appendChild(chipRow);
+  }
+
+  const caveat = document.createElement("div");
+  caveat.className = "oil-tank-caveat";
+  caveat.textContent = OIL_TANK_CAVEAT;
+  card.appendChild(caveat);
+
+  card.appendChild(createOilTankSourceLine(oilTank, formatOilTankMatchLabel(oilTank)));
+
+  const detail = document.createElement("div");
+  detail.className = "oil-tank-detail";
+  const permitPhrase = oilTank.permitNumber ? ` (${oilTank.permitNumber})` : "";
+  const issuedPhrase = oilTank.dateIssued ? `, issued ${oilTank.dateIssued}` : "";
+  const sentences = [`Seattle holds a tank decommissioning permit${permitPhrase} for this address${issuedPhrase}.`];
+  if (oilTank.company) sentences.push(`Decommissioned by ${oilTank.company}.`);
+  if (oilTank.recordCount > 1) sentences.push(`${oilTank.recordCount} records matched; showing the most recent.`);
+  detail.textContent = sentences.join(" ");
+  card.appendChild(detail);
+
+  return section;
+}
+
+function createOilTankSourceLine(oilTank, matchLabel) {
+  const source = document.createElement("div");
+  source.className = "oil-tank-source";
+
+  const link = document.createElement("a");
+  link.textContent = "Seattle UST decommissioning dataset";
+  link.href = oilTank.datasetUrl;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  source.appendChild(link);
+
+  const rest = document.createElement("span");
+  rest.textContent = ` · ${matchLabel}`;
+  source.appendChild(rest);
+  return source;
+}
+
 function renderPermitsTab(listing) {
   const container = document.createElement("div");
   container.className = "tab-content permits-tab";
+
+  container.appendChild(createOilTankSection(listing.report?.oilTank));
 
   const permitHeading = document.createElement("div");
   permitHeading.className = "section-heading";

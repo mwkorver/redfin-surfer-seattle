@@ -68,6 +68,28 @@
         </div>
       </details>
 
+      <details class="settings-details" id="details-stuck-listing">
+        <summary class="settings-summary">
+          <span>Remove a stuck listing</span>
+          <span class="arrow">▾</span>
+        </summary>
+        <div class="settings-content">
+          <p class="settings-note">
+            For listings that no longer load on Redfin, so their heart cannot be reached.
+            This removes the listing here and from the backend only — if it is still
+            hearted on Redfin, it will come back on the next page view.
+          </p>
+          <div class="input-group">
+            <label for="select-stuck-listing">Listing</label>
+            <select id="select-stuck-listing"></select>
+          </div>
+          <button type="button" id="btn-force-remove" class="force-remove-button">
+            Remove without un-hearting
+          </button>
+          <div id="force-remove-status" class="settings-status"></div>
+        </div>
+      </details>
+
       <details class="settings-details">
         <summary class="settings-summary">
           <span>Scoring weights</span>
