@@ -697,8 +697,9 @@ test("delete button renders only for the listing open in the active tab", () => 
   assert.equal(renderWithCurrent("").length, 0);
 });
 
-function loadContentScript(heartButton, dialogState = {}) {
+function loadContentScript(heartButton, dialogState = {}, options = {}) {
   const messages = [];
+  const fetches = [];
   let clickListener = null;
 
   const listingPath = "/WA/Seattle/2544-NE-90th-St-98115/home/318529";
@@ -744,7 +745,21 @@ function loadContentScript(heartButton, dialogState = {}) {
           return Promise.resolve();
         }
       },
-      storage: { local: { set: () => Promise.resolve() } }
+      storage: {
+        local: {
+          set: () => Promise.resolve(),
+          get: () => Promise.resolve({ hearted_listings: options.hearted || {} })
+        }
+      }
+    },
+    fetch: (url, init) => {
+      fetches.push({ url, init });
+      return Promise.resolve(options.serverResponse || { ok: true, text: () => Promise.resolve("<html></html>") });
+    },
+    DOMParser: class {
+      parseFromString() {
+        return { querySelectorAll: selector => (selector === "button" ? (options.serverButtons || []) : []) };
+      }
     }
   });
 
@@ -759,6 +774,8 @@ function loadContentScript(heartButton, dialogState = {}) {
 
   return {
     messages,
+    fetches,
+    removeIfNoLongerHearted: () => vm.runInContext("removeListingIfNoLongerHearted", context)(),
     getClickListener: () => clickListener,
     unheart(listingKey) {
       return new Promise(resolve => {
@@ -1038,4 +1055,117 @@ test("address predicates anchor the number and match the street as a whole word"
   }
   assert.deepEqual(permits.map(p => p.permitnum), ["A", "A", "A", "A", "A"], "NE row filtered out of every source");
   assert.deepEqual(tanks.map(t => t.address), ["1938 NW 97", "1938 NW 97TH ST"], "run-on number filtered out");
+});
+
+test("the delete row follows the active tab, and ignores slow or failed replies", async () => {
+  const element = {
+    addEventListener() {},
+    classList: { toggle() {} },
+    replaceChildren() {},
+    appendChild() {},
+    value: "",
+    checked: false,
+    textContent: ""
+  };
+  let activeTab = null;
+  let reply = () => Promise.resolve(null);
+  const context = createContext({
+    document: { addEventListener() {}, getElementById: () => element, createElement: () => ({ ...element }) },
+    chrome: {
+      runtime: { getURL: v => v, onMessage: { addListener() {} }, sendMessage: () => Promise.resolve() },
+      storage: { local: { get() {}, set() {}, remove() {} }, onChanged: { addListener() {} } },
+      tabs: {
+        create() {},
+        query: (_options, callback) => callback(activeTab ? [activeTab] : []),
+        sendMessage: (_tabId, message) => reply(message)
+      }
+    },
+    clearTimeout, setTimeout, requestAnimationFrame() {},
+    fetch() { throw new Error("no fetch expected"); }
+  });
+  [
+    "shared/scoring.js", "sidepanel/sidepanel-model.js", "sidepanel/sidepanel-api.js",
+    "sidepanel/sidepanel-analysis.js", "sidepanel/sidepanel-storage.js",
+    "sidepanel/sidepanel-renderer.js", "sidepanel/sidepanel.js"
+  ].forEach(filename => loadScript(context, filename));
+
+  const refresh = vm.runInContext("refreshCurrentListingKey", context);
+  const current = () => vm.runInContext("currentListingKey", context);
+  const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+  const listingUrl = "https://www.redfin.com/WA/Seattle/2544-NE-90th-St-98115/home/318529";
+  const listingKey = "redfin/WA/Seattle/2544-NE-90th-St-98115/home/318529";
+
+  // Hearted listing page in the active tab.
+  activeTab = { id: 7, url: listingUrl };
+  reply = message => {
+    assert.equal(message.action, "GET_CURRENT_LISTING");
+    return Promise.resolve({ success: true, data: { url: listingUrl } });
+  };
+  refresh(); await settle();
+  assert.equal(current(), listingKey);
+
+  // The page answers null when its heart is not filled.
+  reply = () => Promise.resolve({ success: true, data: null });
+  refresh(); await settle();
+  assert.equal(current(), "");
+
+  // A non-Redfin active tab is never asked.
+  activeTab = { id: 8, url: "https://example.com/" };
+  reply = () => { throw new Error("must not message a non-Redfin tab"); };
+  refresh(); await settle();
+  assert.equal(current(), "");
+
+  // No content script (e.g. a tab opened before the extension loaded).
+  activeTab = { id: 9, url: listingUrl };
+  reply = () => Promise.reject(new Error("Receiving end does not exist"));
+  refresh(); await settle();
+  assert.equal(current(), "");
+
+  // A slow reply from an earlier tab must not overwrite a newer answer.
+  let releaseSlow;
+  reply = () => new Promise(resolve => { releaseSlow = () => resolve({ success: true, data: { url: listingUrl } }); });
+  refresh();
+  reply = () => Promise.resolve({ success: true, data: null });
+  refresh(); await settle();
+  releaseSlow(); await settle();
+  assert.equal(current(), "");
+});
+
+test("a portfolio listing is removed only when the live page and Redfin's server both show it un-hearted", async () => {
+  const listingKey = "redfin/WA/Seattle/2544-NE-90th-St-98115/home/318529";
+  const unsaved = () => fakeHeartButton({ "aria-label": "Favorite this home" });
+  const saved = () => fakeHeartButton({ "aria-label": "Unfavorite this home" });
+  const removals = page => page.messages.filter(m => m.action === "REMOVE_HEARTED_LISTING");
+
+  // Both empty, and the listing is in the panel: remove it.
+  let page = loadContentScript(unsaved(), {}, { hearted: { [listingKey]: {} }, serverButtons: [unsaved()] });
+  assert.equal(await page.removeIfNoLongerHearted(), true);
+  assert.equal(removals(page).length, 1);
+  assert.equal(removals(page)[0].listingKey, listingKey);
+  assert.equal(page.fetches[0].init.credentials, "include", "must read the page as the signed-in user");
+
+  // The live heart is empty but the server says it is a favorite: this is the
+  // in-app navigation case where the heart has not caught up yet. Keep it.
+  page = loadContentScript(unsaved(), {}, { hearted: { [listingKey]: {} }, serverButtons: [saved()] });
+  assert.equal(await page.removeIfNoLongerHearted(), false);
+  assert.deepEqual(removals(page), []);
+
+  // No heart at all on the server copy is not evidence either way.
+  page = loadContentScript(unsaved(), {}, { hearted: { [listingKey]: {} }, serverButtons: [] });
+  assert.equal(await page.removeIfNoLongerHearted(), false);
+  assert.deepEqual(removals(page), []);
+
+  // Not in the panel: nothing to do, and no need to fetch the page.
+  page = loadContentScript(unsaved(), {}, { hearted: {}, serverButtons: [unsaved()] });
+  assert.equal(await page.removeIfNoLongerHearted(), false);
+  assert.equal(page.fetches.length, 0);
+
+  // The server copy could not be read: leave it alone.
+  page = loadContentScript(unsaved(), {}, {
+    hearted: { [listingKey]: {} },
+    serverButtons: [unsaved()],
+    serverResponse: { ok: false, text: () => Promise.resolve("") }
+  });
+  assert.equal(await page.removeIfNoLongerHearted(), false);
+  assert.deepEqual(removals(page), []);
 });

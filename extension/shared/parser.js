@@ -425,11 +425,11 @@ const PropertyParser = {
    * Returns the page's Save/Favorite button, preferring one already in the saved
    * state so callers act on the same button getPageHeartState() reports on.
    */
-  findPageHeartButton() {
+  findPageHeartButton(root = document) {
     let firstMatch = null;
 
-    // Scan all button elements on the page
-    const buttons = document.querySelectorAll('button');
+    // Scan all button elements on the page (or on a parsed copy of it)
+    const buttons = root.querySelectorAll('button');
     for (const btn of buttons) {
       if (!this.isFavoriteSaveButton(btn)) continue;
       if (!firstMatch) firstMatch = btn;
@@ -447,8 +447,8 @@ const PropertyParser = {
   /**
    * Checks if the active listing page is currently "Hearted" or "Favorited" by the user.
    */
-  getPageHeartState() {
-    const button = this.findPageHeartButton();
+  getPageHeartState(root = document) {
+    const button = this.findPageHeartButton(root);
     if (!button) return "unknown";
     return this.isHeartButtonSaved(button) ? "saved" : "unsaved";
   },

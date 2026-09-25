@@ -16,7 +16,10 @@ const parcelResolutionPromises = new Map();
 const scheduledListings = new Set();
 const deletingListings = new Set();
 const deleteErrors = new Map();
-// listingKey of the property open in the active tab; only that row may be deleted.
+// listingKey of the hearted listing open in this window's active tab; only that
+// row gets a delete button. Always derived by asking that tab (see
+// refreshCurrentListingKey), never read from the shared current_listing value,
+// which any Redfin tab can overwrite, including background ones.
 let currentListingKey = "";
 let storageWriteQueue = Promise.resolve();
 let backendSyncQueue = Promise.resolve();
@@ -67,7 +70,7 @@ function loadState() {
       if (listingKey) portfolio[listingKey] = normalizeStoredListing(listing, listingKey);
     });
 
-    currentListingKey = res.current_listing ? getListingKey(res.current_listing) : "";
+    refreshCurrentListingKey();
 
     apiEndpoint = normalizeConfiguredApiEndpoint(res.aws_api_url);
     inputApiUrl.value = apiEndpoint;
@@ -177,6 +180,13 @@ function setupEventListeners() {
 
   btnForceRemove.addEventListener("click", forceRemoveListing);
 
+  chrome.tabs.onActivated.addListener(() => refreshCurrentListingKey());
+  chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+    if (tab?.active && (changeInfo.url || changeInfo.status === "complete")) {
+      refreshCurrentListingKey();
+    }
+  });
+
   propertyList.addEventListener("click", event => {
     const detailsButton = event.target.closest(".details-toggle");
     const runButton = event.target.closest(".run-button");
@@ -227,10 +237,10 @@ function setupEventListeners() {
       schedulePortfolioEnrichment();
     }
 
-    if (changes.current_listing) {
-      const listing = changes.current_listing.newValue;
-      currentListingKey = listing ? getListingKey(listing) : "";
-      renderPortfolio();
+    // A tab reporting a listing (or clearing one) usually means the heart just
+    // settled somewhere. It may not be the active tab, so use it only as a cue.
+    if (changes.current_listing || changes.hearted_listings) {
+      refreshCurrentListingKey();
     }
 
     if (changes.aws_api_url) {
@@ -434,6 +444,32 @@ function forceRemoveListing() {
       btnForceRemove.disabled = false;
       forceRemoveStatus.textContent = `Could not remove ${label}.`;
     });
+}
+
+// Ask the page in this window's active tab which hearted listing it shows. The
+// content script answers GET_CURRENT_LISTING with data only on a listing page
+// whose heart is filled, so a null answer means "no delete button anywhere".
+// Stale answers are dropped so a slow reply cannot overwrite a newer one.
+let currentListingRequestId = 0;
+
+function refreshCurrentListingKey() {
+  const requestId = ++currentListingRequestId;
+  const apply = key => {
+    if (requestId !== currentListingRequestId || key === currentListingKey) return;
+    currentListingKey = key;
+    renderPortfolio();
+  };
+
+  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+    const tab = tabs?.[0];
+    if (!tab?.id || !/^https?:\/\/([^/]+\.)?redfin\.com\//.test(tab.url || "")) {
+      apply("");
+      return;
+    }
+    chrome.tabs.sendMessage(tab.id, { action: "GET_CURRENT_LISTING" })
+      .then(response => apply(response?.data ? getListingKey(response.data) : ""))
+      .catch(() => apply(""));
+  });
 }
 
 // Deleting a property means un-hearting it on Redfin. The heart is the source of

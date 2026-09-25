@@ -219,6 +219,13 @@ function runAndSend(delay = 800) {
         chrome.runtime.sendMessage({
           action: "CLEAR_CURRENT_LISTING"
         }).catch(() => {});
+        // "unknown" means no heart was found at all, which says nothing about
+        // whether the listing is still a favorite, so only act on "unsaved".
+        if (heartState === "unsaved") {
+          removeListingIfNoLongerHearted().catch(error => {
+            console.warn("[Diligence Sidecar] Un-hearted listing check failed:", error);
+          });
+        }
         return;
       }
 
@@ -384,6 +391,42 @@ function handleListingCardHeartToggle(button, containerInfo) {
       }).catch(() => {});
     }
   });
+}
+
+// A listing leaves the portfolio when it stops being a favorite on Redfin, however
+// that happened: through Redfin's "Remove from Favorites" dialog (which finishes
+// long after the click handler stops watching), on another device, or before
+// this check existed. The live page alone is not trusted, because an in-app
+// navigation can draw the heart before Redfin knows the favorites. Redfin's
+// server HTML carries the real state, so both must agree before anything is
+// removed. Runs at most once at a time per listing.
+const unheartChecksInFlight = new Set();
+
+async function removeListingIfNoLongerHearted() {
+  const listingKey = getRedfinListingKey(window.location.href);
+  if (!listingKey || unheartChecksInFlight.has(listingKey)) return false;
+
+  const stored = await chrome.storage.local.get(["hearted_listings"]);
+  if (!stored.hearted_listings?.[listingKey]) return false;
+
+  unheartChecksInFlight.add(listingKey);
+  try {
+    const response = await fetch(window.location.href, { credentials: "include" });
+    if (!response.ok) return false;
+    const serverPage = new DOMParser().parseFromString(await response.text(), "text/html");
+    const serverState = PropertyParser.getPageHeartState(serverPage);
+
+    // Re-check the live page too: the user may have re-hearted meanwhile.
+    if (serverState !== "unsaved" || PropertyParser.getPageHeartState() !== "unsaved") return false;
+    // And make sure we are still on the same listing.
+    if (getRedfinListingKey(window.location.href) !== listingKey) return false;
+
+    console.log("[Diligence Sidecar] Listing is no longer a Redfin favorite; removing:", listingKey);
+    await chrome.runtime.sendMessage({ action: "REMOVE_HEARTED_LISTING", listingKey }).catch(() => {});
+    return true;
+  } finally {
+    unheartChecksInFlight.delete(listingKey);
+  }
 }
 
 // Drive Redfin's own heart control on behalf of the side panel's delete button.
