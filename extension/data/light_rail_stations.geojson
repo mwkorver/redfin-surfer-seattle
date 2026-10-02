@@ -504,6 +504,26 @@
     {
       "geometry": {
         "coordinates": [
+          -122.323851,
+          47.724043
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "lines": [
+          "1 Line",
+          "2 Line"
+        ],
+        "name": "Pinehurst",
+        "stationId": "N13",
+        "url": "",
+        "wheelchairBoarding": true
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {
+        "coordinates": [
           -122.331216,
           47.60256
         ],
@@ -1005,10 +1025,10 @@
     }
   ],
   "metadata": {
-    "feedEndDate": "20260828",
-    "feedStartDate": "20260414",
-    "feedVersion": "SC-Spring-2026.9",
-    "generatedAt": "2026-06-10T03:32:27.409547Z",
+    "feedEndDate": "20270326",
+    "feedStartDate": "20260901",
+    "feedVersion": "SC-Fall-2026.3",
+    "generatedAt": "2026-10-02T17:23:05.273703Z",
     "publisher": "Sound Transit",
     "routeType": 0,
     "source": "https://www.soundtransit.org/GTFS-rail/40_gtfs.zip"

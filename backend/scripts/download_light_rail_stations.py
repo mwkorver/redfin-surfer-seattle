@@ -108,6 +108,33 @@ def build_station_collection(gtfs_bytes, source_url):
     }
 
 
+def merge_planned_stations(collection, existing_collection):
+    """Carry hand-added planned stations forward until GTFS serves them."""
+    served_ids = {
+        feature["properties"]["stationId"]
+        for feature in collection["features"]
+    }
+    served_names = {
+        feature["properties"]["name"].casefold()
+        for feature in collection["features"]
+    }
+    planned = [
+        feature
+        for feature in (existing_collection or {}).get("features", [])
+        if feature.get("properties", {}).get("status") == "planned"
+        and feature["properties"].get("stationId") not in served_ids
+        and feature["properties"].get("name", "").casefold() not in served_names
+    ]
+    collection["features"] = sorted(
+        collection["features"] + planned,
+        key=lambda feature: (
+            feature["properties"]["name"],
+            feature["properties"]["stationId"],
+        ),
+    )
+    return collection
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Download Sound Transit GTFS and create a Link station GeoJSON layer."
@@ -124,6 +151,9 @@ def main():
         gtfs_bytes = response.read()
 
     collection = build_station_collection(gtfs_bytes, args.url)
+    if args.output.exists():
+        existing = json.loads(args.output.read_text(encoding="utf-8"))
+        collection = merge_planned_stations(collection, existing)
     serialized = json.dumps(collection, indent=2, sort_keys=True) + "\n"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(serialized, encoding="utf-8")
