@@ -15,6 +15,20 @@ function renderPortfolio() {
   });
 }
 
+// Bring the card for the listing open in the active tab into view. Called only
+// when that listing changes, so ordinary re-renders never move the list.
+function scrollToCurrentListing() {
+  if (!currentListingKey) return;
+  const row = Array.from(propertyList.querySelectorAll(".property-row"))
+    .find(candidate => candidate.dataset.listingKey === currentListingKey);
+  if (!row) return;
+  const reduceMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  row.closest(".property-card").scrollIntoView({
+    block: "nearest",
+    behavior: reduceMotion ? "auto" : "smooth"
+  });
+}
+
 function compareListings(a, b) {
   const aScore = getDisplayScore(a.report);
   const bScore = getDisplayScore(b.report);
@@ -27,13 +41,15 @@ function compareListings(a, b) {
 function createPropertyCard(listing, index) {
   const score = getDisplayScore(listing.report);
   const hasReport = score !== null;
+  const isCurrent = listing.listingKey === currentListingKey;
   const card = document.createElement("section");
-  card.className = `property-card${expandedListings.has(listing.listingKey) ? " expanded" : ""}`;
+  card.className = `property-card${expandedListings.has(listing.listingKey) ? " expanded" : ""}${isCurrent ? " current" : ""}`;
 
   const row = document.createElement("article");
   row.className = "property-row";
   row.dataset.listingKey = listing.listingKey;
   row.tabIndex = 0;
+  if (isCurrent) row.setAttribute("aria-current", "true");
   row.setAttribute("aria-label", `${listing.address.streetAddress}, ${score === null ? "not scored" : `score ${score}`}`);
 
   const image = document.createElement("img");
@@ -112,7 +128,7 @@ function createPropertyCard(listing, index) {
 
   // Deleting means un-hearting on Redfin, so the control only exists while the
   // listing is the one open in the active tab and its heart is reachable.
-  if (listing.listingKey === currentListingKey) {
+  if (isCurrent) {
     const deleteButton = document.createElement("button");
     deleteButton.className = "delete-button";
     deleteButton.type = "button";

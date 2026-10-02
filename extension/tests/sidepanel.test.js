@@ -689,12 +689,21 @@ test("delete button renders only for the listing open in the active tab", () => 
     loadScript(context, "sidepanel/sidepanel-model.js");
     loadScript(context, "sidepanel/sidepanel-renderer.js");
     const card = vm.runInContext("createPropertyCard", context)(listing, 0);
-    return flatten(card).filter(node => node.className === "delete-button");
+    return {
+      card,
+      deleteButtons: flatten(card).filter(node => node.className === "delete-button")
+    };
   }
 
-  assert.equal(renderWithCurrent(listing.listingKey).length, 1);
-  assert.equal(renderWithCurrent("redfin/WA/Seattle/somewhere-else/home/999").length, 0);
-  assert.equal(renderWithCurrent("").length, 0);
+  const open = renderWithCurrent(listing.listingKey);
+  assert.equal(open.deleteButtons.length, 1);
+  assert.match(open.card.className, /\bcurrent\b/, "the open listing is highlighted");
+  assert.equal(open.card.children[0].attributes["aria-current"], "true");
+
+  const elsewhere = renderWithCurrent("redfin/WA/Seattle/somewhere-else/home/999");
+  assert.equal(elsewhere.deleteButtons.length, 0);
+  assert.doesNotMatch(elsewhere.card.className, /\bcurrent\b/);
+  assert.equal(renderWithCurrent("").deleteButtons.length, 0);
 });
 
 function loadContentScript(heartButton, dialogState = {}, options = {}) {
@@ -1058,11 +1067,17 @@ test("address predicates anchor the number and match the street as a whole word"
 });
 
 test("the delete row follows the active tab, and ignores slow or failed replies", async () => {
+  const scrolls = [];
+  const renderedRow = {
+    dataset: { listingKey: "redfin/WA/Seattle/2544-NE-90th-St-98115/home/318529" },
+    closest: () => ({ scrollIntoView: options => scrolls.push(options) })
+  };
   const element = {
     addEventListener() {},
     classList: { toggle() {} },
     replaceChildren() {},
     appendChild() {},
+    querySelectorAll: () => [renderedRow],
     value: "",
     checked: false,
     textContent: ""
@@ -1103,6 +1118,12 @@ test("the delete row follows the active tab, and ignores slow or failed replies"
   };
   refresh(); await settle();
   assert.equal(current(), listingKey);
+  assert.equal(scrolls.length, 1, "the open listing's card is scrolled into view");
+  assert.equal(scrolls[0].block, "nearest");
+
+  // Asking again about the same listing does not move the list a second time.
+  refresh(); await settle();
+  assert.equal(scrolls.length, 1);
 
   // The page answers null when its heart is not filled.
   reply = () => Promise.resolve({ success: true, data: null });
@@ -1129,6 +1150,7 @@ test("the delete row follows the active tab, and ignores slow or failed replies"
   refresh(); await settle();
   releaseSlow(); await settle();
   assert.equal(current(), "");
+  assert.equal(scrolls.length, 1, "leaving a listing never scrolls");
 });
 
 test("a portfolio listing is removed only when the live page and Redfin's server both show it un-hearted", async () => {

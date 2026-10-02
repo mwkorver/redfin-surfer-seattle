@@ -147,6 +147,12 @@ body {
   background: var(--surface-hover);
 }
 
+/* The listing open in the active tab. */
+.property-card.current {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .property-row {
   display: grid;
   grid-template-columns: 82px minmax(0, 1fr) 52px;

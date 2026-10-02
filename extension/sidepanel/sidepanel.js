@@ -458,6 +458,7 @@ function refreshCurrentListingKey() {
     if (requestId !== currentListingRequestId || key === currentListingKey) return;
     currentListingKey = key;
     renderPortfolio();
+    scrollToCurrentListing();
   };
 
   chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
