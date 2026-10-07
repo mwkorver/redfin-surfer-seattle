@@ -1229,3 +1229,60 @@ test("side sewer map link centers on Seattle listings only", () => {
   }), null);
   assert.equal(context.createSideSewerMapUrl({ address: { city: "Seattle", state: "WA" }, geo: {} }), null);
 });
+
+function createSyncContext(postResponses) {
+  const calls = [];
+  let getCount = 0;
+  const jsonResponse = (status, body, etag) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: name => (name === "ETag" ? etag || "" : null) },
+    json: async () => body
+  });
+  const context = createContext({
+    setTimeout: callback => callback(),
+    fetch: async (url, options = {}) => {
+      if ((options.method || "GET") === "GET") {
+        getCount += 1;
+        return jsonResponse(200, {}, `"etag-get-${getCount}"`);
+      }
+      calls.push(options.headers["If-Match"] || "");
+      const next = postResponses.shift();
+      return jsonResponse(next.status, next.body || {}, next.etag);
+    },
+    portfolioEtag: `"etag-start"`,
+    apiEndpoint: "https://example.lambda-url.us-west-2.on.aws/",
+    apiToken: "test-token"
+  });
+  loadScript(context, "sidepanel/sidepanel-api.js");
+  return { context, calls };
+}
+
+test("sync keeps retrying write conflicts with a fresh ETag until one lands", async () => {
+  const conflict = { status: 409, body: { error: "conflict", message: "The property changed in S3." } };
+  const { context, calls } = createSyncContext([
+    conflict,
+    conflict,
+    conflict,
+    { status: 200, body: { summary: "saved" }, etag: `"etag-written"` }
+  ]);
+
+  const result = await context.syncProperty({ listingKey: "redfin/WA/Seattle/x/home/1" });
+
+  assert.equal(result.summary, "saved");
+  assert.deepEqual(calls, [`"etag-start"`, `"etag-get-1"`, `"etag-get-2"`, `"etag-get-3"`]);
+  assert.equal(context.portfolioEtag, `"etag-written"`);
+});
+
+test("sync gives up after the attempt limit and never retries a deleted property", async () => {
+  const conflict = { status: 409, body: { error: "conflict", message: "The property changed in S3." } };
+  const stuck = createSyncContext(Array.from({ length: 10 }, () => ({ ...conflict })));
+  await assert.rejects(stuck.context.syncProperty({}), /changed in S3/);
+  assert.equal(stuck.calls.length, 5);
+
+  const deleted = createSyncContext([
+    { status: 409, body: { error: "deleted", message: "This property was deleted." } }
+  ]);
+  await assert.rejects(deleted.context.syncProperty({}), /was deleted/);
+  assert.equal(deleted.calls.length, 1);
+});

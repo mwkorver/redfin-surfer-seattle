@@ -1,15 +1,39 @@
 /* Shared side panel functions. Loaded before sidepanel.js. */
 
-function syncProperty(listing) {
+// Every write replaces the whole portfolio file in S3, guarded by its ETag. Any
+// other writer (a side panel in another window, a background delete, another
+// device) moves the ETag on, so a conflict is routine: refresh and try again,
+// a few times with a growing, jittered pause so racing panels fall out of step.
+const SYNC_MAX_ATTEMPTS = 5;
+const SYNC_RETRY_BASE_DELAY_MS = 250;
+
+function syncProperty(listing, attempt = 1) {
   return sendProperty(listing, portfolioEtag)
     .catch(error => {
-      if (error.status !== 428 && error.status !== 409) throw error;
-      if (error.serverEtag) {
-        portfolioEtag = error.serverEtag;
-        return sendProperty(listing, portfolioEtag);
-      }
-      return fetchPortfolioEtag().then(etag => sendProperty(listing, etag));
+      if (!isRetryableWriteConflict(error) || attempt >= SYNC_MAX_ATTEMPTS) throw error;
+      const refreshEtag = error.serverEtag
+        ? Promise.resolve(error.serverEtag)
+        : waitMs(syncRetryDelayMs(attempt)).then(fetchPortfolioEtag);
+      return refreshEtag.then(etag => {
+        portfolioEtag = etag;
+        return syncProperty(listing, attempt + 1);
+      });
     });
+}
+
+// A 409 for a deleted property is a decision, not a race; retrying cannot fix it.
+function isRetryableWriteConflict(error) {
+  if (error?.status === 428) return true;
+  return error?.status === 409 && error.code !== "deleted";
+}
+
+function syncRetryDelayMs(attempt) {
+  const base = SYNC_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  return base + Math.random() * base;
+}
+
+function waitMs(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function fetchPortfolioEtag() {
@@ -95,6 +119,7 @@ async function createApiError(response) {
   }
   const error = new Error(details.message || `HTTP ${response.status}`);
   error.status = response.status;
+  error.code = details.error || "";
   error.serverEtag = details.serverEtag || "";
   return error;
 }
