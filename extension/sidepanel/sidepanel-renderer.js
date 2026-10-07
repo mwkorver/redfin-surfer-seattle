@@ -297,11 +297,15 @@ function renderParcelTab(listing) {
   const container = document.createElement("div");
   container.className = "tab-content parcel-tab";
 
+  const sideSewerMap = createSideSewerMapUrl(listing);
+
   if (!listing.parcel) {
     const fallback = document.createElement("div");
     fallback.className = "parcel-unavailable";
     fallback.textContent = "King County parcel data unavailable.";
     container.appendChild(fallback);
+    const sewerLinks = createParcelLinks({ sideSewerMap });
+    if (sewerLinks) container.appendChild(sewerLinks);
     return container;
   }
 
@@ -342,7 +346,7 @@ function renderParcelTab(listing) {
   appendParcelField(parcelRow, "Units", formatOptionalCount(listing.parcel.numberOfUnits));
   appendParcelField(parcelRow, "Buildings", formatOptionalCount(listing.parcel.numberOfBuildings));
 
-  const parcelLinks = createParcelLinks(listing.parcel.links);
+  const parcelLinks = createParcelLinks({ ...listing.parcel.links, sideSewerMap });
   if (parcelLinks) parcelRow.appendChild(parcelLinks);
   container.appendChild(parcelRow);
 
@@ -771,7 +775,8 @@ function createParcelLinks(links) {
     ["Parcel map", links.parcelViewer],
     ["Assessor report", links.assessorReport],
     ["Zoning", links.zoningCodes],
-    ["Taxing districts", links.taxingDistricts]
+    ["Taxing districts", links.taxingDistricts],
+    ["Side sewer map", links.sideSewerMap]
   ].filter(([, url]) => url);
   if (!definitions.length) return null;
 

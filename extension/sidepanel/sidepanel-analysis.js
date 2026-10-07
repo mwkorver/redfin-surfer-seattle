@@ -318,6 +318,57 @@ function createKingCountyParcelLinks(parcelId) {
   };
 }
 
+// Seattle Public Utilities' side sewer card map is an ArcGIS Experience app that
+// only accepts a map center in Washington State Plane North (EPSG:2926, US survey
+// feet), so the listing's latitude/longitude is projected before building the URL.
+const SIDE_SEWER_MAP_BASE_URL = "https://experience.arcgis.com/experience/95749d0993164eefa99300182e99bd43";
+
+function createSideSewerMapUrl(listing) {
+  const address = listing?.address || {};
+  if (!/^seattle$/i.test((address.city || "").trim())) return null;
+  if (address.state && address.state.toUpperCase() !== "WA") return null;
+
+  const latitude = Number(listing.geo?.latitude);
+  const longitude = Number(listing.geo?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+  const [x, y] = projectToWashingtonNorthStatePlane(latitude, longitude);
+  const center = encodeURIComponent(`${x.toFixed(2)},${y.toFixed(2)},2926`);
+  return `${SIDE_SEWER_MAP_BASE_URL}#widget_282=active_datasource_id:dataSource_7,center:${center},scale:250`;
+}
+
+// Lambert Conformal Conic (2 standard parallels) on GRS80, with the EPSG:2926
+// parameters. Returns [easting, northing] in US survey feet. The WGS84 ->
+// NAD83(HARN) datum shift (about 1 m in Seattle) is skipped; it is far below what
+// matters for centering a map on a house.
+function projectToWashingtonNorthStatePlane(latitude, longitude) {
+  const toRadians = degrees => degrees * Math.PI / 180;
+  const a = 6378137;
+  const f = 1 / 298.257222101;
+  const e = Math.sqrt(2 * f - f * f);
+  const metersPerUsFoot = 1200 / 3937;
+  const falseEastingMeters = 500000.0001016;
+
+  const phi1 = toRadians(48 + 44 / 60);
+  const phi2 = toRadians(47.5);
+  const phi0 = toRadians(47);
+  const lambda0 = toRadians(-(120 + 50 / 60));
+
+  const m = phi => Math.cos(phi) / Math.sqrt(1 - (e * Math.sin(phi)) ** 2);
+  const t = phi => Math.tan(Math.PI / 4 - phi / 2) /
+    ((1 - e * Math.sin(phi)) / (1 + e * Math.sin(phi))) ** (e / 2);
+
+  const n = (Math.log(m(phi1)) - Math.log(m(phi2))) / (Math.log(t(phi1)) - Math.log(t(phi2)));
+  const F = m(phi1) / (n * t(phi1) ** n);
+  const rho = phi => a * F * t(phi) ** n;
+
+  const theta = n * (toRadians(longitude) - lambda0);
+  const rhoPoint = rho(toRadians(latitude));
+  const eastingMeters = falseEastingMeters + rhoPoint * Math.sin(theta);
+  const northingMeters = rho(phi0) - rhoPoint * Math.cos(theta);
+  return [eastingMeters / metersPerUsFoot, northingMeters / metersPerUsFoot];
+}
+
 function matchParcelResult(listing, items) {
   const address = listing.address || {};
   const results = Array.isArray(items) ? items : [];

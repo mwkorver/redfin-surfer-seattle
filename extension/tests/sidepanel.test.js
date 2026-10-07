@@ -1191,3 +1191,41 @@ test("a portfolio listing is removed only when the live page and Redfin's server
   assert.equal(await page.removeIfNoLongerHearted(), false);
   assert.deepEqual(removals(page), []);
 });
+
+test("State Plane projection matches EPSG:2926 reference points", () => {
+  const context = createContext();
+  loadScript(context, "sidepanel/sidepanel-analysis.js");
+
+  // Reference values from pyproj (EPSG:4152 -> EPSG:2926), i.e. the projection
+  // alone without the ~1 m WGS84 -> NAD83(HARN) datum shift.
+  [
+    [47.68101430203843, -122.30964399613288, 1276776.8551046075, 251901.0773067394],
+    [47.6062, -122.3321, 1270714.8171141008, 224723.4903684985],
+    [47.5, -122.29, 1280365.1904777866, 185792.98080974005]
+  ].forEach(([latitude, longitude, expectedX, expectedY]) => {
+    const [x, y] = context.projectToWashingtonNorthStatePlane(latitude, longitude);
+    assert.ok(Math.abs(x - expectedX) < 0.01, `easting ${x} vs ${expectedX}`);
+    assert.ok(Math.abs(y - expectedY) < 0.01, `northing ${y} vs ${expectedY}`);
+  });
+});
+
+test("side sewer map link centers on Seattle listings only", () => {
+  const context = createContext();
+  loadScript(context, "sidepanel/sidepanel-analysis.js");
+
+  const url = context.createSideSewerMapUrl({
+    address: { streetAddress: "1703 NE 73rd St", city: "Seattle", state: "WA", zip: "98115" },
+    geo: { latitude: 47.68101430203843, longitude: -122.30964399613288 }
+  });
+  assert.equal(
+    url,
+    "https://experience.arcgis.com/experience/95749d0993164eefa99300182e99bd43" +
+      "#widget_282=active_datasource_id:dataSource_7,center:1276776.86%2C251901.08%2C2926,scale:250"
+  );
+
+  assert.equal(context.createSideSewerMapUrl({
+    address: { city: "Bellevue", state: "WA" },
+    geo: { latitude: 47.61, longitude: -122.2 }
+  }), null);
+  assert.equal(context.createSideSewerMapUrl({ address: { city: "Seattle", state: "WA" }, geo: {} }), null);
+});
