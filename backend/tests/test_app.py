@@ -3,7 +3,7 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 os.environ["PROPERTY_BUCKET"] = "test-properties"
 os.environ["SYNC_TOKEN"] = "test-token-with-at-least-24-chars"
@@ -37,6 +37,10 @@ class FakeS3:
     def __init__(self):
         self.objects = {}
         self.version = 0
+        # Called just before each put_object, to stand in for another writer
+        # whose save lands between this request's download and its upload.
+        self.before_put = None
+        self._in_before_put = False
 
     def list_objects_v2(self, **_kwargs):
         return {
@@ -59,6 +63,12 @@ class FakeS3:
 
     def put_object(self, Bucket, Key, Body, IfMatch=None, IfNoneMatch=None, **_kwargs):
         del Bucket
+        if self.before_put and not self._in_before_put:
+            self._in_before_put = True
+            try:
+                self.before_put()
+            finally:
+                self._in_before_put = False
         current = self.objects.get(Key)
         if IfNoneMatch == "*" and current:
             raise FakeClientError("PreconditionFailed")
@@ -220,6 +230,81 @@ class PropertyApiTests(unittest.TestCase):
 
         listed = app.lambda_handler(event("GET", path="/properties", key=None), None)
         self.assertEqual(len(json.loads(listed["body"])["features"]), 1)
+
+    def save_second_listing_once(self, etag):
+        """A before_put hook: another panel saves a different house, once."""
+        def hook():
+            app.s3.before_put = None
+            other = app.lambda_handler(
+                event("POST", key=None, body=record(listing_key=SECOND_LISTING_KEY),
+                      headers={"if-match": etag}),
+                None,
+            )
+            self.assertEqual(other["statusCode"], 200)
+        return hook
+
+    def test_save_retries_when_another_writer_lands_first(self):
+        created = app.lambda_handler(event("PUT", body=record()), None)
+        etag = created["headers"]["ETag"]
+
+        app.s3.before_put = self.save_second_listing_once(etag)
+        with patch.object(app, "wait_before_retry"):
+            updated = app.lambda_handler(
+                event("PUT", body=record(91), headers={"if-match": etag}),
+                None,
+            )
+        self.assertEqual(updated["statusCode"], 200)
+
+        # Neither save is lost: the retry started from the other writer's file.
+        listed = app.lambda_handler(event("GET", path="/properties", key=None), None)
+        features = {
+            feature["properties"]["listingKey"]: feature
+            for feature in json.loads(listed["body"])["features"]
+        }
+        self.assertEqual(set(features), {LISTING_KEY, SECOND_LISTING_KEY})
+        self.assertEqual(features[LISTING_KEY]["properties"]["report"]["aggregateScore"], 91)
+
+    def test_stale_client_etag_does_not_cause_a_conflict(self):
+        app.lambda_handler(event("PUT", body=record()), None)
+        updated = app.lambda_handler(
+            event("PUT", body=record(91), headers={"if-match": '"etag-from-long-ago"'}),
+            None,
+        )
+        self.assertEqual(updated["statusCode"], 200)
+
+    def test_delete_retries_when_another_writer_lands_first(self):
+        created = app.lambda_handler(event("PUT", body=record()), None)
+        etag = created["headers"]["ETag"]
+
+        app.s3.before_put = self.save_second_listing_once(etag)
+        with patch.object(app, "wait_before_retry"):
+            deleted = app.lambda_handler(event("DELETE", headers={"if-match": etag}), None)
+        self.assertEqual(deleted["statusCode"], 200)
+        self.assertIsNotNone(json.loads(deleted["body"])["properties"]["deletedAt"])
+
+        listed = app.lambda_handler(event("GET", path="/properties", key=None), None)
+        keys = [f["properties"]["listingKey"] for f in json.loads(listed["body"])["features"]]
+        self.assertEqual(keys, [SECOND_LISTING_KEY])
+
+    def test_save_gives_up_with_409_when_it_loses_every_race(self):
+        created = app.lambda_handler(event("PUT", body=record()), None)
+        etag = created["headers"]["ETag"]
+        attempts = []
+
+        def someone_always_writes_first():
+            attempts.append(1)
+            app.s3.version += 1
+            app.s3.objects[app.PARQUET_KEY]["etag"] = f'"etag-{app.s3.version}"'
+
+        app.s3.before_put = someone_always_writes_first
+        with patch.object(app, "wait_before_retry"):
+            updated = app.lambda_handler(
+                event("PUT", body=record(91), headers={"if-match": etag}),
+                None,
+            )
+        self.assertEqual(updated["statusCode"], 409)
+        self.assertEqual(json.loads(updated["body"])["error"], "conflict")
+        self.assertEqual(len(attempts), app.MAX_WRITE_ATTEMPTS)
 
     def test_adds_second_property_with_portfolio_etag(self):
         created = app.lambda_handler(event("POST", key=None, body=record()), None)

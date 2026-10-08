@@ -4,7 +4,9 @@ import hmac
 import json
 import math
 import os
+import random
 import re
+import time
 from datetime import datetime, timezone
 
 import boto3
@@ -26,6 +28,7 @@ BUNDLED_LIGHT_RAIL_STATIONS = os.path.join(
     "light_rail_stations.geojson",
 )
 MAX_BODY_BYTES = 256 * 1024
+MAX_WRITE_ATTEMPTS = 5
 LISTING_KEY_PATTERN = re.compile(
     r"^redfin/[A-Za-z0-9._~%+-]+(?:/[A-Za-z0-9._~%+-]+)*/home/(\d+)$"
 )
@@ -226,7 +229,7 @@ def download_portfolio():
         raise
 
 
-def upload_portfolio(conn, request_etag=None):
+def upload_portfolio(conn, expected_etag=None):
     if os.path.exists(LOCAL_PARQUET):
         try:
             os.remove(LOCAL_PARQUET)
@@ -244,13 +247,47 @@ def upload_portfolio(conn, request_etag=None):
         "Body": body_bytes,
         "ContentType": "application/octet-stream",
     }
-    if request_etag:
-        request["IfMatch"] = request_etag
+    if expected_etag:
+        request["IfMatch"] = expected_etag
     else:
         request["IfNoneMatch"] = "*"
 
     res = s3.put_object(**request)
     return res["ETag"]
+
+
+def update_portfolio(apply_change):
+    """Read the portfolio, apply one change, and write it back only if nobody
+    else wrote in between; on a lost race, start over from the newer file.
+
+    Each write changes a single listing, so the newest file is always a safe
+    base. The client's If-Match therefore does not guard the S3 write: by the
+    time its POST arrives, another panel or a delete has often moved the file
+    on, and a client-side retry needs two slow round trips per attempt.
+
+    apply_change(conn, etag) edits the in-memory table and returns None, or an
+    error response to send without writing. Returns (rejection, new_etag,
+    base_etag); base_etag is the version the change was applied to.
+    """
+    for attempt in range(1, MAX_WRITE_ATTEMPTS + 1):
+        etag = download_portfolio()
+        conn = initialize_db()
+        try:
+            rejection = apply_change(conn, etag)
+            if rejection is not None:
+                return rejection, None, etag
+            return None, upload_portfolio(conn, etag), etag
+        except ClientError as exc:
+            if not is_write_conflict(exc) or attempt == MAX_WRITE_ATTEMPTS:
+                raise
+            print(f"[INFO] Portfolio write lost a race (attempt {attempt}); retrying.")
+        finally:
+            conn.close()
+        wait_before_retry(attempt)
+
+
+def wait_before_retry(attempt):
+    time.sleep(random.uniform(0.05, 0.15) * attempt)
 
 
 def initialize_db():
@@ -424,42 +461,12 @@ def put_property(event):
     longitude = coordinates[0]
     latitude = coordinates[1]
 
-    etag = download_portfolio()
-
     request_etag = normalize_headers(event.get("headers") or {}).get("if-match")
-    if etag and not request_etag:
-        return error_response(
-            428,
-            "precondition_required",
-            "Use If-Match with the current ETag when writing the existing portfolio.",
-            {"serverEtag": etag},
-        )
-    if request_etag and not etag:
-        return error_response(409, "conflict", "The property no longer exists.")
-
-    conn = initialize_db()
-
     redfin_home_id = LISTING_KEY_PATTERN.fullmatch(listing_key).group(1)
     saved_at = properties.get("savedAt") or utc_now()
     server_updated_at = utc_now()
     updated_by = properties.get("updatedBy") or "chrome-extension"
     deleted_at = None
-
-    # A tombstoned key must not be silently revived by a stale client resyncing an
-    # old copy. A genuine re-heart carries a savedAt from after the deletion, so
-    # that is what distinguishes "added again" from "never noticed it was deleted".
-    tombstone = conn.execute("""
-        SELECT deletedAt FROM portfolio
-        WHERE listingKey = ? AND deletedAt IS NOT NULL
-    """, (listing_key,)).fetchone()
-    if tombstone and not is_newer_than(saved_at, tombstone[0]):
-        conn.close()
-        return error_response(
-            409,
-            "deleted",
-            "This property was deleted. Heart it again on Redfin to add it back.",
-            {"deletedAt": tombstone[0]},
-        )
 
     address_str = json.dumps(properties.get("address"))
     geo_str = json.dumps(properties.get("geo") or geojson_feature.get("geometry"))
@@ -473,54 +480,75 @@ def put_property(event):
         except (ValueError, TypeError):
             cumulative_days = None
 
-    if longitude is not None and latitude is not None:
-        conn.execute("""
-            INSERT OR REPLACE INTO portfolio VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ST_Point(?, ?)
+    def apply_change(conn, etag):
+        if etag and not request_etag:
+            return error_response(
+                428,
+                "precondition_required",
+                "Use If-Match with the current ETag when writing the existing portfolio.",
+                {"serverEtag": etag},
             )
-        """, (
-            listing_key,
-            redfin_home_id,
-            float(properties.get("price") or 0),
-            address_str,
-            geo_str,
-            parcel_str,
-            report_str,
-            saved_at,
-            server_updated_at,
-            updated_by,
-            deleted_at,
-            cumulative_days,
-            float(longitude),
-            float(latitude)
-        ))
-    else:
-        conn.execute("""
-            INSERT OR REPLACE INTO portfolio VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
+
+        # A tombstoned key must not be silently revived by a stale client resyncing an
+        # old copy. A genuine re-heart carries a savedAt from after the deletion, so
+        # that is what distinguishes "added again" from "never noticed it was deleted".
+        tombstone = conn.execute("""
+            SELECT deletedAt FROM portfolio
+            WHERE listingKey = ? AND deletedAt IS NOT NULL
+        """, (listing_key,)).fetchone()
+        if tombstone and not is_newer_than(saved_at, tombstone[0]):
+            return error_response(
+                409,
+                "deleted",
+                "This property was deleted. Heart it again on Redfin to add it back.",
+                {"deletedAt": tombstone[0]},
             )
-        """, (
-            listing_key,
-            redfin_home_id,
-            float(properties.get("price") or 0),
-            address_str,
-            geo_str,
-            parcel_str,
-            report_str,
-            saved_at,
-            server_updated_at,
-            updated_by,
-            deleted_at,
-            cumulative_days
-        ))
 
-    try:
-        new_etag = upload_portfolio(conn, request_etag)
-    except ClientError as exc:
-        conn.close()
-        return handle_s3_error(exc)
+        if longitude is not None and latitude is not None:
+            conn.execute("""
+                INSERT OR REPLACE INTO portfolio VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ST_Point(?, ?)
+                )
+            """, (
+                listing_key,
+                redfin_home_id,
+                float(properties.get("price") or 0),
+                address_str,
+                geo_str,
+                parcel_str,
+                report_str,
+                saved_at,
+                server_updated_at,
+                updated_by,
+                deleted_at,
+                cumulative_days,
+                float(longitude),
+                float(latitude)
+            ))
+        else:
+            conn.execute("""
+                INSERT OR REPLACE INTO portfolio VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL
+                )
+            """, (
+                listing_key,
+                redfin_home_id,
+                float(properties.get("price") or 0),
+                address_str,
+                geo_str,
+                parcel_str,
+                report_str,
+                saved_at,
+                server_updated_at,
+                updated_by,
+                deleted_at,
+                cumulative_days
+            ))
+        return None
 
-    conn.close()
+    rejection, new_etag, etag = update_portfolio(apply_change)
+    if rejection is not None:
+        return rejection
 
     report_response = {
         "aggregateScore": 100,
@@ -541,52 +569,47 @@ def put_property(event):
 
 
 def tombstone_property(event, listing_key):
-    etag = download_portfolio()
-    if not etag:
-        return error_response(404, "not_found", "Property does not exist.")
-
     request_etag = normalize_headers(event.get("headers") or {}).get("if-match")
-    if not request_etag:
-        return error_response(
-            428,
-            "precondition_required",
-            "Use If-Match with the current ETag when deleting a property.",
-            {"serverEtag": etag},
-        )
+    deleted_row = {}
 
-    conn = initialize_db()
-    existing = conn.execute("""
-        SELECT *, ST_AsGeoJSON(geometry) as geojson_geom 
-        FROM portfolio 
-        WHERE listingKey = ? AND deletedAt IS NULL
-    """, (listing_key,)).fetchall()
+    def apply_change(conn, etag):
+        if not etag:
+            return error_response(404, "not_found", "Property does not exist.")
+        if not request_etag:
+            return error_response(
+                428,
+                "precondition_required",
+                "Use If-Match with the current ETag when deleting a property.",
+                {"serverEtag": etag},
+            )
 
-    if not existing:
-        conn.close()
-        return error_response(404, "not_found", "Property does not exist.")
+        existing = conn.execute("""
+            SELECT *, ST_AsGeoJSON(geometry) as geojson_geom
+            FROM portfolio
+            WHERE listingKey = ? AND deletedAt IS NULL
+        """, (listing_key,)).fetchall()
+        if not existing:
+            return error_response(404, "not_found", "Property does not exist.")
 
-    columns = [desc[0] for desc in conn.description]
-    row_dict = dict(zip(columns, existing[0]))
+        columns = [desc[0] for desc in conn.description]
+        deleted_row.clear()
+        deleted_row.update(zip(columns, existing[0]))
 
-    timestamp = utc_now()
-    conn.execute("""
-        UPDATE portfolio 
-        SET deletedAt = ?, serverUpdatedAt = ? 
-        WHERE listingKey = ?
-    """, (timestamp, timestamp, listing_key))
+        timestamp = utc_now()
+        deleted_row["deletedAt"] = timestamp
+        deleted_row["serverUpdatedAt"] = timestamp
+        conn.execute("""
+            UPDATE portfolio
+            SET deletedAt = ?, serverUpdatedAt = ?
+            WHERE listingKey = ?
+        """, (timestamp, timestamp, listing_key))
+        return None
 
-    try:
-        new_etag = upload_portfolio(conn, request_etag)
-    except ClientError as exc:
-        conn.close()
-        return handle_s3_error(exc)
+    rejection, new_etag, _ = update_portfolio(apply_change)
+    if rejection is not None:
+        return rejection
 
-    conn.close()
-
-    row_dict["deletedAt"] = timestamp
-    row_dict["serverUpdatedAt"] = timestamp
-
-    return response(200, row_to_geojson(row_dict), {"ETag": new_etag})
+    return response(200, row_to_geojson(deleted_row), {"ETag": new_etag})
 
 
 def to_geojson_feature(payload):
@@ -660,9 +683,13 @@ def normalize_headers(headers):
     return {str(key).lower(): value for key, value in headers.items()}
 
 
+def is_write_conflict(exc):
+    return error_code(exc) in {"PreconditionFailed", "412", "ConditionalRequestConflict", "409"}
+
+
 def handle_s3_error(exc):
     code = error_code(exc)
-    if code in {"PreconditionFailed", "412", "ConditionalRequestConflict", "409"}:
+    if is_write_conflict(exc):
         return error_response(
             409,
             "conflict",

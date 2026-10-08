@@ -62,7 +62,7 @@ aws s3 cp data/light_rail_stations.geojson \
 `backend/property_api/app.py` is the single handler. Routes:
 - `GET /properties` — list portfolio (excludes tombstoned rows), returns ETag.
 - `GET /property?key=…` — single property.
-- `POST /property` / `PUT /property` — upsert; requires `If-Match` ETag after the first write. Returns 428 (missing) or 409 (stale) with `serverEtag` in the body; callers retry.
+- `POST /property` / `PUT /property` — upsert; requires an `If-Match` header after the first write (428 with `serverEtag` if missing). The header's value no longer guards the write; see Concurrency model.
 - `DELETE /property?key=…` — writes a tombstone row; same ETag concurrency rules.
 - `GET /stations` — full Sound Transit station GeoJSON.
 - `GET /nearest-stations?latitude=…&longitude=…&limit=…` — proximity lookup via DuckDB spatial extension.
@@ -70,7 +70,7 @@ aws s3 cp data/light_rail_stations.geojson \
 The Lambda caches the Parquet portfolio and the station GeoJSON in `/tmp`. The station layer is also bundled inside the Lambda artifact (`data/light_rail_stations.geojson`) as a fallback when S3 is unreachable.
 
 ### Concurrency model
-Portfolio writes use optimistic concurrency via HTTP ETag (`If-Match`). The extension retries on 428/409 using the `serverEtag` from the response body. Background deletes that fail are queued in `pending_backend_deletes` and replayed when backend sync is re-enabled.
+The whole portfolio is one Parquet file, and every save or delete changes a single listing. The Lambda (`update_portfolio` in `app.py`) downloads the file, applies the change, and uploads with S3 `IfMatch` set to the ETag *it* just downloaded; if another writer got there first it starts over from the newer file, up to `MAX_WRITE_ATTEMPTS` times, and only then returns 409. The client's `If-Match` must be present but its value is not compared, so a stale client ETag is not a conflict. The extension still retries 428/409 a few times with backoff (never a 409 `deleted`). Background deletes that fail are queued in `pending_backend_deletes` and replayed when backend sync is re-enabled.
 
 ### External data sources (extension-side)
 - Seattle crime incidents: `data.seattle.gov`
